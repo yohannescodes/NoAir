@@ -63,14 +63,38 @@ final class ReadingRecord {
     }
 
     func apply(_ enrichment: ReadingEnrichment) {
-        temperatureC = enrichment.environment?.temperatureC
-        humidityPercent = enrichment.environment?.humidityPercent
-        weatherCondition = enrichment.environment?.weatherCondition
-        altitudeMeters = enrichment.location?.altitudeMeters
-        locality = enrichment.location?.locality
-        activityStepsLastHour = enrichment.activity?.stepsLastHour
-        activeEnergyToday = enrichment.activity?.activeEnergyToday
-        recentWorkout = enrichment.activity?.recentWorkout
+        if let environment = enrichment.environment {
+            if let temperatureC = environment.temperatureC {
+                self.temperatureC = temperatureC
+            }
+            if let humidityPercent = environment.humidityPercent {
+                self.humidityPercent = humidityPercent
+            }
+            if let weatherCondition = environment.weatherCondition {
+                self.weatherCondition = weatherCondition
+            }
+        }
+
+        if let location = enrichment.location {
+            if let altitudeMeters = location.altitudeMeters {
+                self.altitudeMeters = altitudeMeters
+            }
+            if let locality = location.locality {
+                self.locality = locality
+            }
+        }
+
+        if let activity = enrichment.activity {
+            if let stepsLastHour = activity.stepsLastHour {
+                activityStepsLastHour = stepsLastHour
+            }
+            if let activeEnergyToday = activity.activeEnergyToday {
+                self.activeEnergyToday = activeEnergyToday
+            }
+            if let recentWorkout = activity.recentWorkout {
+                self.recentWorkout = recentWorkout
+            }
+        }
         touch()
     }
 

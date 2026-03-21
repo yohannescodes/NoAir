@@ -8,7 +8,11 @@ struct ContentView: View {
     var body: some View {
         TabView(selection: $selectedTab) {
             Tab("Dashboard", systemImage: "cross.case", value: .dashboard) {
-                DashboardView(selectedTab: $selectedTab, selectedLogKind: $selectedLogKind)
+                DashboardView(
+                    selectedTab: $selectedTab,
+                    selectedLogKind: $selectedLogKind,
+                    readingEnricher: readingEnricher
+                )
             }
 
             Tab("Log", systemImage: "plus.circle", value: .log) {

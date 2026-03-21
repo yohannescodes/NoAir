@@ -14,9 +14,14 @@ final class WeatherService {
             return cached
         }
 
-        guard let url = URL(string: """
-            https://api.open-meteo.com/v1/forecast?latitude=\(coordinate.latitude)&longitude=\(coordinate.longitude)&current=temperature_2m,relative_humidity_2m,weather_code
-            """) else {
+        var components = URLComponents(string: "https://api.open-meteo.com/v1/forecast")
+        components?.queryItems = [
+            URLQueryItem(name: "latitude", value: String(coordinate.latitude)),
+            URLQueryItem(name: "longitude", value: String(coordinate.longitude)),
+            URLQueryItem(name: "current", value: "temperature_2m,relative_humidity_2m,weather_code"),
+        ]
+
+        guard let url = components?.url else {
             return cachedSnapshot()
         }
 

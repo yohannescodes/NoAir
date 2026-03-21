@@ -5,6 +5,7 @@ import Foundation
 final class LocationService: NSObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
     private let geocoder = CLGeocoder()
+    private var authorizationContinuation: CheckedContinuation<CLAuthorizationStatus, Never>?
     private var continuation: CheckedContinuation<LocationSnapshot?, Never>?
 
     override init() {
@@ -18,15 +19,14 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
             return nil
         }
 
-        let status = manager.authorizationStatus
+        let status = await authorizationStatus()
         switch status {
-        case .notDetermined:
-            manager.requestWhenInUseAuthorization()
-            return nil
         case .restricted, .denied:
             return nil
         case .authorizedAlways, .authorizedWhenInUse:
             break
+        case .notDetermined:
+            return nil
         @unknown default:
             return nil
         }
@@ -60,6 +60,23 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didFailWithError error: any Error) {
         continuation?.resume(returning: nil)
         continuation = nil
+    }
+
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        authorizationContinuation?.resume(returning: manager.authorizationStatus)
+        authorizationContinuation = nil
+    }
+
+    private func authorizationStatus() async -> CLAuthorizationStatus {
+        let status = manager.authorizationStatus
+        guard status == .notDetermined else {
+            return status
+        }
+
+        manager.requestWhenInUseAuthorization()
+        return await withCheckedContinuation { continuation in
+            authorizationContinuation = continuation
+        }
     }
 
     private func reverseGeocode(location: CLLocation) async -> String? {
