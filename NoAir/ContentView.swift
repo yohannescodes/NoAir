@@ -1,61 +1,23 @@
-//
-//  ContentView.swift
-//  NoAir
-//
-//  Created by Yohannes Haile on 21/03/2026.
-//
-
 import SwiftUI
-import SwiftData
 
 struct ContentView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query private var items: [Item]
+    @State private var selectedTab: AppTab = .dashboard
+    @State private var selectedLogKind: LogEntryKind = .reading
+    @State private var readingEnricher = ReadingEnricher()
 
     var body: some View {
-        NavigationSplitView {
-            List {
-                ForEach(items) { item in
-                    NavigationLink {
-                        Text("Item at \(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))")
-                    } label: {
-                        Text(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))
-                    }
-                }
-                .onDelete(perform: deleteItems)
+        TabView(selection: $selectedTab) {
+            Tab("Dashboard", systemImage: "cross.case", value: .dashboard) {
+                DashboardView(selectedTab: $selectedTab, selectedLogKind: $selectedLogKind)
             }
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    EditButton()
-                }
-                ToolbarItem {
-                    Button(action: addItem) {
-                        Label("Add Item", systemImage: "plus")
-                    }
-                }
+
+            Tab("Log", systemImage: "plus.circle", value: .log) {
+                QuickLogView(selectedLogKind: $selectedLogKind, readingEnricher: readingEnricher)
             }
-        } detail: {
-            Text("Select an item")
-        }
-    }
 
-    private func addItem() {
-        withAnimation {
-            let newItem = Item(timestamp: Date())
-            modelContext.insert(newItem)
-        }
-    }
-
-    private func deleteItems(offsets: IndexSet) {
-        withAnimation {
-            for index in offsets {
-                modelContext.delete(items[index])
+            Tab("Timeline", systemImage: "list.bullet.rectangle.portrait", value: .timeline) {
+                TimelineView()
             }
         }
     }
-}
-
-#Preview {
-    ContentView()
-        .modelContainer(for: Item.self, inMemory: true)
 }
