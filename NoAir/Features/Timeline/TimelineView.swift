@@ -4,13 +4,13 @@ import SwiftUI
 struct TimelineView: View {
     @Environment(\.modelContext) private var modelContext
 
+    @Binding var filter: TimelineFilter
+    @Binding var activeEditor: TimelineEditorRoute?
+
     @Query(sort: \ReadingRecord.timestamp, order: .reverse) private var readings: [ReadingRecord]
     @Query(sort: \VentilationSession.startTime, order: .reverse) private var ventilations: [VentilationSession]
     @Query(sort: \TreatmentEvent.timestamp, order: .reverse) private var treatments: [TreatmentEvent]
     @Query(sort: \LabResultRecord.timestamp, order: .reverse) private var labs: [LabResultRecord]
-
-    @State private var filter: TimelineFilter = .all
-    @State private var activeEditor: TimelineEditorRoute?
 
     var body: some View {
         NavigationStack {

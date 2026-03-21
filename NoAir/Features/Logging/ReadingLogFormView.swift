@@ -5,6 +5,7 @@ struct ReadingLogFormView: View {
     @Environment(\.modelContext) private var modelContext
 
     let readingEnricher: ReadingEnricher
+    let onSaved: (TimelineEditorRoute, TimelineFilter) -> Void
 
     @State private var spo2 = 94
     @State private var includePulse = true
@@ -117,6 +118,7 @@ struct ReadingLogFormView: View {
         modelContext.insert(reading)
         try? modelContext.save()
         saveStatus = "Reading saved. Weather, altitude, and activity will attach if permissions and data are available."
+        onSaved(.reading(reading), .readings)
         resetForm()
 
         Task {

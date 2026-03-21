@@ -3,6 +3,7 @@ import SwiftUI
 
 struct TreatmentLogFormView: View {
     @Environment(\.modelContext) private var modelContext
+    let onSaved: (TimelineEditorRoute, TimelineFilter) -> Void
 
     @State private var timestamp = Date()
     @State private var selectedType: TreatmentType = .medication
@@ -51,6 +52,7 @@ struct TreatmentLogFormView: View {
         modelContext.insert(treatment)
         try? modelContext.save()
         saveStatus = "Treatment event saved."
+        onSaved(.treatment(treatment), .treatments)
         timestamp = .now
         selectedType = .medication
         note = ""

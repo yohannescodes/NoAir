@@ -4,6 +4,8 @@ struct ContentView: View {
     @State private var selectedTab: AppTab = .dashboard
     @State private var selectedLogKind: LogEntryKind = .reading
     @State private var readingEnricher = ReadingEnricher()
+    @State private var timelineFilter: TimelineFilter = .all
+    @State private var activeTimelineEditor: TimelineEditorRoute?
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -16,11 +18,17 @@ struct ContentView: View {
             }
 
             Tab("Log", systemImage: "plus.circle", value: .log) {
-                QuickLogView(selectedLogKind: $selectedLogKind, readingEnricher: readingEnricher)
+                QuickLogView(
+                    selectedTab: $selectedTab,
+                    selectedLogKind: $selectedLogKind,
+                    timelineFilter: $timelineFilter,
+                    activeTimelineEditor: $activeTimelineEditor,
+                    readingEnricher: readingEnricher
+                )
             }
 
             Tab("Timeline", systemImage: "list.bullet.rectangle.portrait", value: .timeline) {
-                TimelineView()
+                TimelineView(filter: $timelineFilter, activeEditor: $activeTimelineEditor)
             }
         }
     }

@@ -3,6 +3,7 @@ import SwiftUI
 
 struct VentilationLogFormView: View {
     @Environment(\.modelContext) private var modelContext
+    let onSaved: (TimelineEditorRoute, TimelineFilter) -> Void
 
     @State private var startTime = Calendar.current.date(byAdding: .minute, value: -30, to: .now) ?? .now
     @State private var endTime = Date()
@@ -57,6 +58,7 @@ struct VentilationLogFormView: View {
         modelContext.insert(session)
         try? modelContext.save()
         saveStatus = "Ventilation session saved."
+        onSaved(.ventilation(session), .ventilation)
         resetForm()
     }
 

@@ -1,7 +1,10 @@
 import SwiftUI
 
 struct QuickLogView: View {
+    @Binding var selectedTab: AppTab
     @Binding var selectedLogKind: LogEntryKind
+    @Binding var timelineFilter: TimelineFilter
+    @Binding var activeTimelineEditor: TimelineEditorRoute?
     let readingEnricher: ReadingEnricher
 
     var body: some View {
@@ -19,18 +22,24 @@ struct QuickLogView: View {
 
                     switch selectedLogKind {
                     case .reading:
-                        ReadingLogFormView(readingEnricher: readingEnricher)
+                        ReadingLogFormView(readingEnricher: readingEnricher, onSaved: openTimeline)
                     case .ventilation:
-                        VentilationLogFormView()
+                        VentilationLogFormView(onSaved: openTimeline)
                     case .treatment:
-                        TreatmentLogFormView()
+                        TreatmentLogFormView(onSaved: openTimeline)
                     case .lab:
-                        LabResultLogFormView()
+                        LabResultLogFormView(onSaved: openTimeline)
                     }
                 }
                 .padding()
             }
             .navigationTitle("Quick Log")
         }
+    }
+
+    private func openTimeline(route: TimelineEditorRoute, filter: TimelineFilter) {
+        timelineFilter = filter
+        activeTimelineEditor = route
+        selectedTab = .timeline
     }
 }

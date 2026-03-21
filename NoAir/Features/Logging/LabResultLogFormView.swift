@@ -3,6 +3,7 @@ import SwiftUI
 
 struct LabResultLogFormView: View {
     @Environment(\.modelContext) private var modelContext
+    let onSaved: (TimelineEditorRoute, TimelineFilter) -> Void
 
     @State private var timestamp = Date()
     @State private var selectedKind: LabKind = .hemoglobin
@@ -81,6 +82,7 @@ struct LabResultLogFormView: View {
         modelContext.insert(result)
         try? modelContext.save()
         saveStatus = "Lab result saved."
+        onSaved(.lab(result), .labs)
         resetForm()
     }
 
