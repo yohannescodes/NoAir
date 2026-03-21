@@ -11,6 +11,7 @@ struct DashboardView: View {
     @Query(sort: \TreatmentEvent.timestamp, order: .reverse) private var treatments: [TreatmentEvent]
 
     private let statsColumns = [GridItem(.flexible()), GridItem(.flexible())]
+    private let quickActionColumns = [GridItem(.flexible()), GridItem(.flexible())]
 
     var body: some View {
         NavigationStack {
@@ -19,11 +20,19 @@ struct DashboardView: View {
                     DisclaimerCardView()
 
                     CardSurface(title: "Quick Add", systemImage: "plus.circle") {
-                        HStack(spacing: 12) {
-                            quickActionButton("Reading", systemImage: "waveform.path.ecg", kind: .reading)
-                            quickActionButton("Vent", systemImage: "wind", kind: .ventilation)
-                            quickActionButton("Treatment", systemImage: "cross.vial", kind: .treatment)
-                            quickActionButton("Lab", systemImage: "testtube.2", kind: .lab)
+                        LazyVGrid(columns: quickActionColumns, spacing: 12) {
+                            QuickActionTileView(title: "Reading", systemImage: "waveform.path.ecg") {
+                                openLog(kind: .reading)
+                            }
+                            QuickActionTileView(title: "Ventilation", systemImage: "wind") {
+                                openLog(kind: .ventilation)
+                            }
+                            QuickActionTileView(title: "Treatment", systemImage: "cross.vial") {
+                                openLog(kind: .treatment)
+                            }
+                            QuickActionTileView(title: "Lab Result", systemImage: "testtube.2") {
+                                openLog(kind: .lab)
+                            }
                         }
                     }
 
@@ -207,15 +216,5 @@ struct DashboardView: View {
     private func openLog(kind: LogEntryKind) {
         selectedLogKind = kind
         selectedTab = .log
-    }
-
-    private func quickActionButton(_ title: String, systemImage: String, kind: LogEntryKind) -> some View {
-        Button(title, systemImage: systemImage) {
-            openLog(kind: kind)
-        }
-        .buttonStyle(.borderedProminent)
-        .tint(Color.white.opacity(0.12))
-        .foregroundStyle(.white)
-        .frame(maxWidth: .infinity)
     }
 }
