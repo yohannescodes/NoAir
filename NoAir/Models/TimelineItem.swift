@@ -28,7 +28,7 @@ struct TimelineItem: Identifiable {
         date = ventilation.startTime
         filter = .ventilation
         title = "Ventilation"
-        subtitle = ventilation.reason?.isEmpty == false ? ventilation.reason ?? "" : "Session logged"
+        subtitle = TimelineItem.ventilationSubtitle(for: ventilation)
         value = ventilation.durationMinutes.map { "\($0)m" } ?? "Open"
         systemImage = "wind"
         tint = .cyan
@@ -57,5 +57,31 @@ struct TimelineItem: Identifiable {
         systemImage = "testtube.2"
         tint = .purple
         reference = .lab(lab)
+    }
+
+    private static func ventilationSubtitle(for session: VentilationSession) -> String {
+        var parts: [String] = []
+
+        if let initialSaturation = session.initialSaturation, let finalSaturation = session.finalSaturation {
+            let delta = finalSaturation - initialSaturation
+            let deltaText = delta == 0 ? "no change" : delta > 0 ? "+\(delta)" : "\(delta)"
+            parts.append("SpO2 \(initialSaturation)% → \(finalSaturation)% (\(deltaText))")
+        }
+
+        if let initialPulse = session.initialPulse, let finalPulse = session.finalPulse {
+            let delta = finalPulse - initialPulse
+            let deltaText = delta == 0 ? "no change" : delta > 0 ? "+\(delta)" : "\(delta)"
+            parts.append("Pulse \(initialPulse) → \(finalPulse) (\(deltaText))")
+        }
+
+        if parts.isEmpty, let reason = session.reason, !reason.isEmpty {
+            return reason
+        }
+
+        if parts.isEmpty {
+            return "Session logged"
+        }
+
+        return parts.joined(separator: " • ")
     }
 }

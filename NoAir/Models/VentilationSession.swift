@@ -7,6 +7,10 @@ final class VentilationSession {
     var startTime: Date
     var endTime: Date?
     var durationMinutes: Int?
+    var initialSaturation: Int?
+    var initialPulse: Int?
+    var finalSaturation: Int?
+    var finalPulse: Int?
     var reason: String?
     var note: String?
     var createdAt: Date
@@ -17,6 +21,10 @@ final class VentilationSession {
         startTime: Date,
         endTime: Date? = nil,
         durationMinutes: Int? = nil,
+        initialSaturation: Int? = nil,
+        initialPulse: Int? = nil,
+        finalSaturation: Int? = nil,
+        finalPulse: Int? = nil,
         reason: String? = nil,
         note: String? = nil,
         createdAt: Date = .now,
@@ -26,6 +34,10 @@ final class VentilationSession {
         self.startTime = startTime
         self.endTime = endTime
         self.durationMinutes = durationMinutes ?? VentilationSession.minutesBetween(startTime: startTime, endTime: endTime)
+        self.initialSaturation = initialSaturation
+        self.initialPulse = initialPulse
+        self.finalSaturation = finalSaturation
+        self.finalPulse = finalPulse
         self.reason = reason
         self.note = note
         self.createdAt = createdAt
@@ -41,5 +53,15 @@ final class VentilationSession {
         guard let endTime else { return nil }
         let minutes = Int(endTime.timeIntervalSince(startTime) / 60)
         return minutes >= 0 ? minutes : nil
+    }
+
+    var saturationDelta: Int? {
+        guard let initialSaturation, let finalSaturation else { return nil }
+        return finalSaturation - initialSaturation
+    }
+
+    var pulseDelta: Int? {
+        guard let initialPulse, let finalPulse else { return nil }
+        return finalPulse - initialPulse
     }
 }

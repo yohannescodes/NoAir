@@ -8,6 +8,10 @@ struct VentilationLogFormView: View {
     @State private var startTime = Calendar.current.date(byAdding: .minute, value: -30, to: .now) ?? .now
     @State private var endTime = Date()
     @State private var includeEndTime = true
+    @State private var initialSaturation = 88
+    @State private var initialPulse = 96
+    @State private var finalSaturation = 92
+    @State private var finalPulse = 84
     @State private var reason = ""
     @State private var note = ""
     @State private var saveStatus = ""
@@ -20,6 +24,28 @@ struct VentilationLogFormView: View {
                     Toggle("Set end time", isOn: $includeEndTime)
                     if includeEndTime {
                         DatePicker("End", selection: $endTime, in: startTime...)
+                    }
+                }
+            }
+
+            CardSurface(title: "Before / After", systemImage: "waveform.path.ecg.rectangle") {
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack(spacing: 16) {
+                        TextField("Initial SpO2", value: $initialSaturation, format: .number)
+                            .keyboardType(.numberPad)
+                            .textFieldStyle(.roundedBorder)
+                        TextField("Initial Pulse", value: $initialPulse, format: .number)
+                            .keyboardType(.numberPad)
+                            .textFieldStyle(.roundedBorder)
+                    }
+
+                    HStack(spacing: 16) {
+                        TextField("Final SpO2", value: $finalSaturation, format: .number)
+                            .keyboardType(.numberPad)
+                            .textFieldStyle(.roundedBorder)
+                        TextField("Final Pulse", value: $finalPulse, format: .number)
+                            .keyboardType(.numberPad)
+                            .textFieldStyle(.roundedBorder)
                     }
                 }
             }
@@ -51,6 +77,10 @@ struct VentilationLogFormView: View {
         let session = VentilationSession(
             startTime: startTime,
             endTime: includeEndTime ? endTime : nil,
+            initialSaturation: min(max(initialSaturation, 50), 100),
+            initialPulse: min(max(initialPulse, 20), 250),
+            finalSaturation: min(max(finalSaturation, 50), 100),
+            finalPulse: min(max(finalPulse, 20), 250),
             reason: clean(reason),
             note: clean(note)
         )
@@ -71,6 +101,10 @@ struct VentilationLogFormView: View {
         startTime = Calendar.current.date(byAdding: .minute, value: -30, to: .now) ?? .now
         endTime = .now
         includeEndTime = true
+        initialSaturation = 88
+        initialPulse = 96
+        finalSaturation = 92
+        finalPulse = 84
         reason = ""
         note = ""
     }

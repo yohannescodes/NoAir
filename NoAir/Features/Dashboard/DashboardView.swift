@@ -207,9 +207,20 @@ struct DashboardView: View {
             return "No ventilation sessions logged yet."
         }
 
-        let reason = ventilation.reason?.isEmpty == false ? ventilation.reason ?? "" : "No reason entered"
         let duration = ventilation.durationMinutes.map { "\($0) min" } ?? "Open session"
-        return "Last ventilation: \(duration), \(reason)"
+        let saturation = ventilation.initialSaturation.flatMap { initial in
+            ventilation.finalSaturation.map { final in
+                "SpO2 \(initial)%→\(final)%"
+            }
+        }
+        let pulse = ventilation.initialPulse.flatMap { initial in
+            ventilation.finalPulse.map { final in
+                "Pulse \(initial)→\(final)"
+            }
+        }
+        let reason = ventilation.reason?.isEmpty == false ? ventilation.reason ?? "" : nil
+        let summary = [duration, saturation, pulse, reason].compactMap { $0 }.joined(separator: " • ")
+        return "Last ventilation: \(summary)"
     }
 
     private var lastTreatmentSummary: String {
