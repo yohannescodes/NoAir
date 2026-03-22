@@ -5,10 +5,12 @@ struct AICommentaryCardView: View {
     let ventilations: [VentilationSession]
     let treatments: [TreatmentEvent]
     let labs: [LabResultRecord]
+    let autoGenerateOnAppear: Bool
 
     @AppStorage("gemini.apiKey") private var apiKey = ""
     @AppStorage("gemini.commentary.text") private var cachedCommentary = ""
     @AppStorage("gemini.commentary.generatedAt") private var generatedAtTimestamp = 0.0
+    @AppStorage("gemini.commentary.logsSignature") private var cachedLogsSignature = ""
 
     @State private var isGenerating = false
     @State private var statusMessage = ""
@@ -16,6 +18,20 @@ struct AICommentaryCardView: View {
 
     private let service = GeminiCommentaryService()
     private let promptBuilder = GeminiCommentaryPromptBuilder()
+
+    init(
+        readings: [ReadingRecord],
+        ventilations: [VentilationSession],
+        treatments: [TreatmentEvent],
+        labs: [LabResultRecord],
+        autoGenerateOnAppear: Bool = false
+    ) {
+        self.readings = readings
+        self.ventilations = ventilations
+        self.treatments = treatments
+        self.labs = labs
+        self.autoGenerateOnAppear = autoGenerateOnAppear
+    }
 
     var body: some View {
         CardSurface(title: "AI Commentary", systemImage: "sparkles") {
@@ -67,6 +83,10 @@ struct AICommentaryCardView: View {
         .sheet(isPresented: $isShowingAPIKeySheet) {
             GeminiAPIKeySheet(apiKey: $apiKey)
         }
+        .task(id: autoGenerationTaskID) {
+            guard autoGenerateOnAppear else { return }
+            await generateCommentaryIfNeeded()
+        }
     }
 
     private var generatedAt: Date? {
@@ -77,8 +97,50 @@ struct AICommentaryCardView: View {
         !readings.contains { $0.activityStepsLastHour != nil || $0.recentWorkout != nil || $0.activeEnergyToday != nil }
     }
 
+    private var currentLogsSignature: String {
+        let readingSignature = readings
+            .map { "\($0.id.uuidString):\($0.updatedAt.timeIntervalSince1970)" }
+            .joined(separator: "|")
+        let ventilationSignature = ventilations
+            .map { "\($0.id.uuidString):\($0.updatedAt.timeIntervalSince1970)" }
+            .joined(separator: "|")
+        let treatmentSignature = treatments
+            .map { "\($0.id.uuidString):\($0.updatedAt.timeIntervalSince1970)" }
+            .joined(separator: "|")
+        let labSignature = labs
+            .map { "\($0.id.uuidString):\($0.updatedAt.timeIntervalSince1970)" }
+            .joined(separator: "|")
+
+        return [
+            "r[\(readingSignature)]",
+            "v[\(ventilationSignature)]",
+            "t[\(treatmentSignature)]",
+            "l[\(labSignature)]"
+        ].joined(separator: "#")
+    }
+
+    private var autoGenerationTaskID: String {
+        "\(autoGenerateOnAppear)-\(currentLogsSignature)-\(apiKey)"
+    }
+
+    @MainActor
+    private func generateCommentaryIfNeeded() async {
+        guard !apiKey.isEmpty, !readings.isEmpty else { return }
+        guard cachedLogsSignature != currentLogsSignature || cachedCommentary.isEmpty else { return }
+        await generateCommentary(trigger: .automatic)
+    }
+
     private func generateCommentary() {
-        statusMessage = ""
+        Task {
+            await generateCommentary(trigger: .manual)
+        }
+    }
+
+    @MainActor
+    private func generateCommentary(trigger: GenerationTrigger) async {
+        guard !isGenerating else { return }
+
+        statusMessage = trigger == .automatic ? "Refreshing commentary for the latest logs…" : ""
         isGenerating = true
 
         let prompt = promptBuilder.buildPrompt(
@@ -88,21 +150,23 @@ struct AICommentaryCardView: View {
             labs: labs
         )
 
-        Task {
-            do {
-                let commentary = try await service.generateCommentary(apiKey: apiKey, prompt: prompt)
-                await MainActor.run {
-                    cachedCommentary = commentary
-                    generatedAtTimestamp = Date().timeIntervalSince1970
-                    isGenerating = false
-                    statusMessage = ""
-                }
-            } catch {
-                await MainActor.run {
-                    statusMessage = error.localizedDescription
-                    isGenerating = false
-                }
-            }
+        do {
+            let commentary = try await service.generateCommentary(apiKey: apiKey, prompt: prompt)
+            cachedCommentary = commentary
+            cachedLogsSignature = currentLogsSignature
+            generatedAtTimestamp = Date().timeIntervalSince1970
+            isGenerating = false
+            statusMessage = trigger == .automatic ? "Commentary updated for the latest logs." : ""
+        } catch {
+            statusMessage = error.localizedDescription
+            isGenerating = false
         }
+    }
+}
+
+private extension AICommentaryCardView {
+    enum GenerationTrigger {
+        case automatic
+        case manual
     }
 }

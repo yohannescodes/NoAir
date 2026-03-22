@@ -16,7 +16,8 @@ struct DashboardSupportView: View {
                     readings: readings,
                     ventilations: ventilations,
                     treatments: treatments,
-                    labs: labs
+                    labs: labs,
+                    autoGenerateOnAppear: true
                 )
             }
             .padding()

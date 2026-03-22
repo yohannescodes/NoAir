@@ -3,6 +3,8 @@ import SwiftData
 import SwiftUI
 
 struct DashboardView: View {
+    @Environment(\.modelContext) private var modelContext
+
     @Binding var selectedTab: AppTab
     @Binding var selectedLogKind: LogEntryKind
     let readingEnricher: ReadingEnricher
@@ -13,6 +15,7 @@ struct DashboardView: View {
 
     private let statsColumns = [GridItem(.flexible()), GridItem(.flexible())]
     private let quickActionColumns = [GridItem(.flexible()), GridItem(.flexible())]
+    @State private var isRefreshingContext = false
 
     var body: some View {
         NavigationStack {
@@ -99,6 +102,16 @@ struct DashboardView: View {
                 .padding()
             }
             .navigationTitle("NoAir")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(
+                        isRefreshingContext ? "Refreshing…" : "Refresh Context",
+                        systemImage: "arrow.clockwise",
+                        action: refreshLatestReadingContext
+                    )
+                    .disabled(latestReading == nil || isRefreshingContext)
+                }
+            }
         }
     }
 
@@ -190,6 +203,30 @@ struct DashboardView: View {
     private func openLog(kind: LogEntryKind) {
         selectedLogKind = kind
         selectedTab = .log
+    }
+
+    private func refreshLatestReadingContext() {
+        Task {
+            await refreshLatestReadingContextIfNeeded(force: true)
+        }
+    }
+
+    private func refreshLatestReadingContextIfNeeded(force: Bool = false) async {
+        guard let latestReading else { return }
+
+        let isMissingContext = latestReading.weatherCondition == nil ||
+            latestReading.temperatureC == nil ||
+            latestReading.altitudeMeters == nil ||
+            latestReading.locality == nil
+
+        guard force || isMissingContext else { return }
+        guard !isRefreshingContext else { return }
+
+        isRefreshingContext = true
+        let enrichment = await readingEnricher.enrichReading()
+        latestReading.apply(enrichment)
+        try? modelContext.save()
+        isRefreshingContext = false
     }
 
     private func statValue(_ text: String?) -> String {
