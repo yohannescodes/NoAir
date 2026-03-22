@@ -1,0 +1,28 @@
+.DS_Store
+
+# Xcode build output
+build/
+DerivedData/
+
+# Xcode user data
+*.xcuserstate
+xcuserdata/
+*.xccheckout
+*.xcscmblueprint
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Packages/
+
+# Playground and local editor files
+timeline.xctimeline
+playground.xcworkspace
+*.swp
+*.swo
+
+# Optional tool output
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output/
