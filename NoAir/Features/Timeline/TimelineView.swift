@@ -16,12 +16,19 @@ struct TimelineView: View {
         NavigationStack {
             List {
                 Section {
-                    Picker("Filter", selection: $filter) {
-                        ForEach(TimelineFilter.allCases) { filter in
-                            Text(filter.rawValue).tag(filter)
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Filter")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.secondary)
+
+                        SelectionChipBar(
+                            options: TimelineFilter.allCases,
+                            selection: $filter
+                        ) { filter in
+                            filter.rawValue
                         }
                     }
-                    .pickerStyle(.segmented)
+                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                 }
 
                 if filteredItems.isEmpty {

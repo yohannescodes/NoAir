@@ -13,12 +13,18 @@ struct QuickLogView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     DisclaimerCardView()
 
-                    Picker("Entry Type", selection: $selectedLogKind) {
-                        ForEach(LogEntryKind.allCases) { kind in
-                            Text(kind.rawValue).tag(kind)
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Entry Type")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.secondary)
+
+                        SelectionChipBar(
+                            options: LogEntryKind.allCases,
+                            selection: $selectedLogKind
+                        ) { kind in
+                            kind.rawValue
                         }
                     }
-                    .pickerStyle(.segmented)
 
                     switch selectedLogKind {
                     case .reading:
