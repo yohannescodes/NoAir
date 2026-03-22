@@ -1,96 +1,53 @@
 # NoAir
 
-NoAir is a local-first iPhone app for tracking oxygen saturation (`SpO2`), pulse, symptoms, ventilation sessions, treatments, lab results, and passive context such as weather, location, and motion.
+NoAir is a local-first SwiftUI app for logging oxygen saturation (`SpO2`), pulse, symptoms, ventilation sessions, treatments, and lab results on iPhone and iPad.
 
-The product is intended to make manual health logging fast, structured, and useful for pattern awareness and clinician conversations.
+It is designed to make personal respiratory tracking fast, structured, and useful for pattern awareness. NoAir is not a medical device and does not diagnose conditions, prescribe treatment, or make emergency decisions.
 
-NoAir is not a medical device. It does not diagnose, recommend treatment, or make emergency decisions.
+## What The App Does
 
-## Repository Status
+The current app ships with three primary surfaces:
 
-This repository currently has two meaningful states:
+- `Dashboard`: daily stats, current snapshot, trends, context summaries, reminders, and AI commentary
+- `Quick Log`: fast entry flows for readings, ventilation sessions, treatments, and lab results
+- `Timeline`: reverse-chronological history with filters, editing, and deletion
 
-- `main`
-  This branch is the clean Xcode/SwiftData scaffold plus repository hygiene and documentation.
-- `codex/noair-v1`
-  This branch contains the active application implementation work: dashboard flows, timeline editing, reminders, AI commentary, and health-log models.
+Persisted records currently include:
 
-This `README.md` lives on `main`, so it documents both:
+- `ReadingRecord`
+- `VentilationSession`
+- `TreatmentEvent`
+- `LabResultRecord`
 
-- what NoAir is supposed to become
-- what is actually present on `main` today
+## Product Characteristics
 
-## Product Vision
+- Local-first data storage with SwiftData
+- Manual-first logging with optional context enrichment
+- One unified timeline instead of scattered notes
+- Optional AI commentary for descriptive summaries of recent logs
+- Clear non-clinical framing throughout the UI
 
-NoAir is designed around a few principles:
+## Context Enrichment
 
-- local-first by default
-- manual-first, automation-assisted
-- fast logging over perfect completeness
-- one unified timeline instead of fragmented health notes
-- transparent summaries instead of black-box advice
+Saved readings can be enriched with passive context when permissions and network access are available:
 
-## Target User
+- location for locality and altitude
+- motion activity for recent movement context
+- weather from Open-Meteo for temperature, humidity, and conditions
 
-NoAir is meant for a technically capable iPhone user who:
+NoAir also supports recurring local notification reminders for logging the next reading.
 
-- manually checks oxygen saturation with a pulse oximeter
-- needs to correlate readings with symptoms, ventilation, treatments, and labs
-- wants a clearer personal record before talking to clinicians
-- prefers speed, clarity, and control over generic wellness tooling
+## AI Commentary
 
-## Intended Feature Set
+The app includes an optional Gemini-based commentary feature:
 
-Planned product scope includes:
+- API key entry happens in-app
+- the key is stored locally on-device
+- commentary is intended to be descriptive, not prescriptive
 
-- quick `SpO2` and pulse logging
-- symptom tagging and contextual notes
-- ventilation session logging
-- treatment event logging
-- lab result logging
-- unified reverse-chronological timeline
-- dashboard summaries and charts
-- passive enrichment with weather, altitude, and motion context
-- non-clinical AI summaries of recent logs
-- local reminders to log readings
-
-## Current State On `main`
-
-The `main` branch is still the default SwiftUI + SwiftData starter project created by Xcode.
-
-What is on `main` right now:
-
-- a single `Item` SwiftData model
-- a starter `NavigationSplitView`
-- a working Xcode project (`NoAir.xcodeproj`)
-- repository hygiene via `.gitignore`
-- project documentation in this `README.md`
-
-What is not yet on `main`:
-
-- the actual NoAir data models
-- the dashboard/timeline/logging workflows
-- reminders, context enrichment, or AI commentary
-
-Those live on `codex/noair-v1` until merged.
+Current implementation uses Google Gemini `gemini-2.5-flash`.
 
 ## Project Structure
-
-Current structure on `main`:
-
-```text
-NoAir/
-├── NoAir/
-│   ├── ContentView.swift
-│   ├── Item.swift
-│   ├── NoAirApp.swift
-│   └── Assets.xcassets/
-├── NoAir.xcodeproj/
-├── .gitignore
-└── README.md
-```
-
-Expected structure once the product branch is merged:
 
 ```text
 NoAir/
@@ -102,85 +59,64 @@ NoAir/
 │   ├── Models/
 │   ├── Services/
 │   ├── Shared/
+│   ├── Assets.xcassets/
 │   ├── ContentView.swift
 │   └── NoAirApp.swift
 ├── NoAir.xcodeproj/
-├── .gitignore
+├── LICENSE
 └── README.md
 ```
 
 ## Tech Stack
 
-The app is being built with:
-
 - Swift
 - SwiftUI
 - SwiftData
-- Xcode project workflow
-
-Planned integrations in the fuller app branch include:
-
+- Charts
 - Core Location
-- motion/activity APIs
-- weather API integration
-- local notifications
-- Gemini API for descriptive commentary
+- Core Motion
+- UserNotifications
+- Open-Meteo API
+- Gemini API
+
+## Requirements
+
+- Xcode with support for the project deployment target currently set in [NoAir.xcodeproj/project.pbxproj](/Users/yohanneshaile/Documents/Projects/vibed/NoAir/NoAir.xcodeproj/project.pbxproj)
+- iPhone or iPad simulator/device compatible with the configured target
+- network access for weather lookup and Gemini commentary
+- notification permission for reminders
+- location and motion permission for context enrichment
 
 ## Running The App
 
-On `main`:
-
-1. Open [NoAir.xcodeproj](/Users/yohanneshaile/Documents/Projects/vibed/NoAir/NoAir.xcodeproj).
+1. Open [NoAir.xcodeproj](/Users/yohanneshaile/Documents/Projects/vibed/NoAir/NoAir.xcodeproj) in Xcode.
 2. Select the `NoAir` scheme.
-3. Choose an iPhone simulator.
-4. Build and run from Xcode.
+3. Choose an iPhone or iPad simulator, or a connected device.
+4. Build and run.
 
-Or from Terminal:
+You can also build from Terminal:
 
 ```bash
-xcodebuild -scheme NoAir -project NoAir.xcodeproj -destination 'generic/platform=iOS Simulator' build
+xcodebuild -scheme NoAir -project NoAir.xcodeproj -destination 'generic/platform=iOS' build
 ```
-
-## Branch Workflow
-
-Recommended interpretation of branches in this repo:
-
-- `main`
-  Stable baseline, documentation, and eventual merged product state.
-- `codex/noair-v1`
-  Feature work and active product iteration.
-
-If you want the fully implemented NoAir experience described in the recent product work, use or merge `codex/noair-v1`.
-
-## Safety
-
-NoAir should be treated as a personal logging tool, not a clinical decision system.
-
-- It should not tell users what treatment to take.
-- It should not determine whether ventilation is needed.
-- It should not be used for emergency decisions.
-- Any AI-generated summary must remain descriptive and non-prescriptive.
-
-## Roadmap
-
-High-priority next steps for bringing `main` up to product shape:
-
-1. Merge the NoAir feature branch into `main`.
-2. Replace the starter `Item` model with domain-specific health models.
-3. Add dashboard, quick logging, and timeline flows.
-4. Wire passive context enrichment and reminders.
-5. Add export/reporting and tighten permissions handling.
 
 ## Development Notes
 
-The `.gitignore` is configured for typical Xcode and Swift development so local machine state does not pollute the repository. It ignores:
+- The app uses a shared SwiftData `ModelContainer` configured in [NoAirApp.swift](/Users/yohanneshaile/Documents/Projects/vibed/NoAir/NoAir/NoAirApp.swift).
+- `ContentView` wires the top-level tab structure in [ContentView.swift](/Users/yohanneshaile/Documents/Projects/vibed/NoAir/NoAir/ContentView.swift).
+- Dashboard, logging, and timeline flows are organized under [NoAir/Features](/Users/yohanneshaile/Documents/Projects/vibed/NoAir/NoAir/Features).
+- Cross-cutting UI pieces live under [NoAir/Shared](/Users/yohanneshaile/Documents/Projects/vibed/NoAir/NoAir/Shared).
+- Permission-backed services and external integrations live under [NoAir/Services](/Users/yohanneshaile/Documents/Projects/vibed/NoAir/NoAir/Services).
 
-- Xcode build artifacts
-- user-specific workspace state
-- SwiftPM local build output
-- macOS Finder metadata
-- common local editor temp files
+## Safety
+
+NoAir should be treated as a personal logging tool only.
+
+- It should not be used to determine treatment.
+- It should not replace clinical judgment.
+- It should not be used for emergency decision-making.
+- AI-generated text should be treated as a summary layer, not medical advice.
 
 ## License
 
-No license file is currently present in this repository.
+This project is licensed under the MIT License. See [LICENSE](/Users/yohanneshaile/Documents/Projects/vibed/NoAir/LICENSE).
