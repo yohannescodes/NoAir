@@ -4,6 +4,28 @@ NoAir is a local-first SwiftUI app for logging oxygen saturation (`SpO2`), pulse
 
 It is designed to make personal respiratory tracking fast, structured, and useful for pattern awareness. NoAir is not a medical device and does not diagnose conditions, prescribe treatment, or make emergency decisions.
 
+## Screen Tour
+
+<p align="center">
+  <img src="assets/readme/dashboard-home.jpeg" alt="NoAir dashboard home with safety note and current snapshot" width="32%" />
+  <img src="assets/readme/dashboard-today.jpeg" alt="NoAir dashboard today metrics cards" width="32%" />
+  <img src="assets/readme/dashboard-explore.jpeg" alt="NoAir dashboard explore section with summary, trends, context, and AI reminders" width="32%" />
+</p>
+
+<p align="center">
+  <img src="assets/readme/clinical-summary.jpeg" alt="Clinical summary view with latest reading, insights, and latest events" width="32%" />
+  <img src="assets/readme/trends.jpeg" alt="Trends view with line chart and recent readings" width="32%" />
+  <img src="assets/readme/environment.jpeg" alt="Environment view with weather, humidity, altitude, and locality" width="32%" />
+</p>
+
+<p align="center">
+  <img src="assets/readme/activity.jpeg" alt="Activity view with recent movement context and reading snapshot" width="48%" />
+  <img src="assets/readme/timeline.jpeg" alt="Timeline view with event filters and reading history" width="22%" />
+  <img src="assets/readme/edit-reading.jpeg" alt="Reading editor sheet for quick corrections and note updates" width="22%" />
+</p>
+
+These screens show the app’s main flow: quick situational awareness on the dashboard, deeper trend and context views, then a timeline and editor for detailed record keeping.
+
 ## What The App Does
 
 The current app ships with three primary surfaces:
@@ -63,6 +85,8 @@ NoAir/
 │   ├── ContentView.swift
 │   └── NoAirApp.swift
 ├── NoAir.xcodeproj/
+├── assets/
+│   └── readme/
 ├── LICENSE
 └── README.md
 ```
