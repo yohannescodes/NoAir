@@ -39,6 +39,7 @@ struct QuickLogView: View {
                 }
                 .padding()
             }
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Quick Log")
         }
     }

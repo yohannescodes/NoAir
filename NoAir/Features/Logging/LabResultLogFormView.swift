@@ -13,15 +13,30 @@ struct LabResultLogFormView: View {
     @State private var referenceRange = ""
     @State private var note = ""
     @State private var saveStatus = ""
+    @FocusState private var focusedField: Field?
+
+    private enum Field: Hashable {
+        case customLabName
+        case value
+        case unit
+        case referenceRange
+        case note
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             CardSurface(title: "Lab Result", systemImage: "testtube.2") {
                 VStack(alignment: .leading, spacing: 16) {
                     DatePicker("Timestamp", selection: $timestamp)
-                    Picker("Lab", selection: $selectedKind) {
-                        ForEach(LabKind.allCases) { kind in
-                            Text(kind.rawValue).tag(kind)
+                        .formInputSurface()
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        FormInputLabel(title: "Lab")
+                        SelectionChipBar(
+                            options: LabKind.allCases,
+                            selection: $selectedKind
+                        ) { kind in
+                            kind.rawValue
                         }
                     }
                     .onChange(of: selectedKind) {
@@ -32,23 +47,45 @@ struct LabResultLogFormView: View {
 
                     if selectedKind == .custom {
                         TextField("Custom lab name", text: $customLabName)
-                            .textFieldStyle(.roundedBorder)
+                            .focused($focusedField, equals: .customLabName)
+                            .textInputAutocapitalization(.words)
+                            .submitLabel(.next)
+                            .onSubmit { focusedField = .value }
+                            .formInputSurface()
                     }
 
-                    TextField("Value", value: $value, format: .number)
-                        .keyboardType(.decimalPad)
-                        .textFieldStyle(.roundedBorder)
-                    TextField("Unit", text: $unit)
-                        .textFieldStyle(.roundedBorder)
-                    TextField("Reference range", text: $referenceRange)
-                        .textFieldStyle(.roundedBorder)
+                    VStack(alignment: .leading, spacing: 8) {
+                        FormInputLabel(title: "Value")
+                        TextField("Value", value: $value, format: .number)
+                            .keyboardType(.decimalPad)
+                            .focused($focusedField, equals: .value)
+                            .formInputSurface()
+                    }
+                    VStack(alignment: .leading, spacing: 8) {
+                        FormInputLabel(title: "Unit")
+                        TextField("Unit", text: $unit)
+                            .focused($focusedField, equals: .unit)
+                            .submitLabel(.next)
+                            .onSubmit { focusedField = .referenceRange }
+                            .formInputSurface()
+                    }
+                    VStack(alignment: .leading, spacing: 8) {
+                        FormInputLabel(title: "Reference range")
+                        TextField("Reference range", text: $referenceRange)
+                            .focused($focusedField, equals: .referenceRange)
+                            .submitLabel(.next)
+                            .onSubmit { focusedField = .note }
+                            .formInputSurface()
+                    }
                 }
             }
 
             CardSurface(title: "Notes", systemImage: "note.text") {
                 TextField("Optional note", text: $note, axis: .vertical)
                     .lineLimit(4...)
-                    .textFieldStyle(.roundedBorder)
+                    .focused($focusedField, equals: .note)
+                    .textInputAutocapitalization(.sentences)
+                    .formInputSurface(minHeight: 120)
             }
 
             Button("Save Lab Result", systemImage: "tray.and.arrow.down", action: saveLab)
@@ -61,9 +98,23 @@ struct LabResultLogFormView: View {
                     .foregroundStyle(.secondary)
             }
         }
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") {
+                    focusedField = nil
+                }
+            }
+        }
+        .simultaneousGesture(
+            TapGesture().onEnded {
+                focusedField = nil
+            }
+        )
     }
 
     private func saveLab() {
+        focusedField = nil
         let name = selectedKind == .custom ? customLabName.trimmingCharacters(in: .whitespacesAndNewlines) : selectedKind.rawValue
         guard !name.isEmpty else {
             saveStatus = "A lab name is required."
@@ -99,5 +150,6 @@ struct LabResultLogFormView: View {
         unit = LabKind.hemoglobin.suggestedUnit
         referenceRange = ""
         note = ""
+        focusedField = selectedKind == .custom ? .customLabName : .value
     }
 }

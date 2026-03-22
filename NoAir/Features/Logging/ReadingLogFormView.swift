@@ -17,9 +17,15 @@ struct ReadingLogFormView: View {
     @State private var onVentilation = false
     @State private var saveStatus = ""
 
-    private let symptomColumns = [GridItem(.flexible()), GridItem(.flexible())]
-    private let contextColumns = [GridItem(.flexible()), GridItem(.flexible())]
     private let reminderService = ReadingReminderService()
+    @FocusState private var focusedField: Field?
+
+    private enum Field: Hashable {
+        case spo2
+        case pulse
+        case context
+        case note
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -27,53 +33,65 @@ struct ReadingLogFormView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     HStack(spacing: 16) {
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("SpO2")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                            FormInputLabel(title: "SpO2")
                             TextField("SpO2", value: $spo2, format: .number)
                                 .font(.system(.largeTitle, design: .rounded).weight(.bold))
                                 .keyboardType(.numberPad)
+                                .focused($focusedField, equals: .spo2)
+                                .formInputSurface(minHeight: 74)
                         }
 
                         VStack(alignment: .leading, spacing: 8) {
                             Toggle("Pulse", isOn: $includePulse)
-                                .font(.subheadline)
+                                .font(.subheadline.weight(.semibold))
                             if includePulse {
                                 TextField("Pulse", value: $pulse, format: .number)
                                     .font(.title.weight(.semibold))
                                     .keyboardType(.numberPad)
+                                    .focused($focusedField, equals: .pulse)
+                                    .formInputSurface(minHeight: 74)
                             } else {
                                 Text("Optional")
                                     .foregroundStyle(.secondary)
+                                    .formInputSurface(minHeight: 74)
                             }
                         }
                     }
 
                     DatePicker("Timestamp", selection: $timestamp)
+                        .formInputSurface()
                     Toggle("On ventilation", isOn: $onVentilation)
                 }
             }
 
             CardSurface(title: "Context", systemImage: "bolt.horizontal") {
                 VStack(alignment: .leading, spacing: 12) {
-                    LazyVGrid(columns: contextColumns, spacing: 10) {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 10) {
                         ForEach(ReadingContextTag.allCases) { tag in
-                            TagToggleChip(label: tag.rawValue, isSelected: context == tag.rawValue) {
+                                TagToggleChip(label: tag.rawValue, isSelected: context == tag.rawValue, fillsWidth: false) {
                                 context = context == tag.rawValue ? "" : tag.rawValue
                             }
                         }
                     }
+                    }
 
                     TextField("Custom context", text: $context)
-                        .textFieldStyle(.roundedBorder)
+                        .focused($focusedField, equals: .context)
+                        .textInputAutocapitalization(.sentences)
+                        .submitLabel(.next)
+                        .onSubmit { focusedField = .note }
+                        .formInputSurface()
                 }
             }
 
             CardSurface(title: "Symptoms", systemImage: "stethoscope") {
-                LazyVGrid(columns: symptomColumns, spacing: 10) {
-                    ForEach(SymptomTag.allCases) { symptom in
-                        TagToggleChip(label: symptom.rawValue, isSelected: selectedSymptoms.contains(symptom)) {
-                            toggleSymptom(symptom)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(SymptomTag.allCases) { symptom in
+                            TagToggleChip(label: symptom.rawValue, isSelected: selectedSymptoms.contains(symptom), fillsWidth: false) {
+                                toggleSymptom(symptom)
+                            }
                         }
                     }
                 }
@@ -82,7 +100,9 @@ struct ReadingLogFormView: View {
             CardSurface(title: "Notes", systemImage: "note.text") {
                 TextField("Add anything worth remembering", text: $note, axis: .vertical)
                     .lineLimit(4...)
-                    .textFieldStyle(.roundedBorder)
+                    .focused($focusedField, equals: .note)
+                    .textInputAutocapitalization(.sentences)
+                    .formInputSurface(minHeight: 120)
             }
 
             Button("Save Reading", systemImage: "tray.and.arrow.down", action: saveReading)
@@ -95,6 +115,23 @@ struct ReadingLogFormView: View {
                     .foregroundStyle(.secondary)
             }
         }
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") {
+                    focusedField = nil
+                }
+            }
+        }
+        .task {
+            guard focusedField == nil else { return }
+            focusedField = .spo2
+        }
+        .simultaneousGesture(
+            TapGesture().onEnded {
+                focusedField = nil
+            }
+        )
     }
 
     private func toggleSymptom(_ symptom: SymptomTag) {
@@ -106,6 +143,7 @@ struct ReadingLogFormView: View {
     }
 
     private func saveReading() {
+        focusedField = nil
         let reading = ReadingRecord(
             timestamp: timestamp,
             spo2: min(max(spo2, 50), 100),
@@ -150,5 +188,6 @@ struct ReadingLogFormView: View {
         selectedSymptoms.removeAll()
         note = ""
         onVentilation = false
+        focusedField = .spo2
     }
 }

@@ -15,15 +15,27 @@ struct VentilationLogFormView: View {
     @State private var reason = ""
     @State private var note = ""
     @State private var saveStatus = ""
+    @FocusState private var focusedField: Field?
+
+    private enum Field: Hashable {
+        case initialSaturation
+        case initialPulse
+        case finalSaturation
+        case finalPulse
+        case reason
+        case note
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             CardSurface(title: "Ventilation Session", systemImage: "wind") {
                 VStack(alignment: .leading, spacing: 16) {
                     DatePicker("Start", selection: $startTime)
+                        .formInputSurface()
                     Toggle("Set end time", isOn: $includeEndTime)
                     if includeEndTime {
                         DatePicker("End", selection: $endTime, in: startTime...)
+                            .formInputSurface()
                     }
                 }
             }
@@ -31,34 +43,56 @@ struct VentilationLogFormView: View {
             CardSurface(title: "Before / After", systemImage: "waveform.path.ecg.rectangle") {
                 VStack(alignment: .leading, spacing: 16) {
                     HStack(spacing: 16) {
-                        TextField("Initial SpO2", value: $initialSaturation, format: .number)
-                            .keyboardType(.numberPad)
-                            .textFieldStyle(.roundedBorder)
-                        TextField("Initial Pulse", value: $initialPulse, format: .number)
-                            .keyboardType(.numberPad)
-                            .textFieldStyle(.roundedBorder)
+                        VStack(alignment: .leading, spacing: 8) {
+                            FormInputLabel(title: "Initial SpO2")
+                            TextField("Initial SpO2", value: $initialSaturation, format: .number)
+                                .keyboardType(.numberPad)
+                                .focused($focusedField, equals: .initialSaturation)
+                                .formInputSurface()
+                        }
+                        VStack(alignment: .leading, spacing: 8) {
+                            FormInputLabel(title: "Initial Pulse")
+                            TextField("Initial Pulse", value: $initialPulse, format: .number)
+                                .keyboardType(.numberPad)
+                                .focused($focusedField, equals: .initialPulse)
+                                .formInputSurface()
+                        }
                     }
 
                     HStack(spacing: 16) {
-                        TextField("Final SpO2", value: $finalSaturation, format: .number)
-                            .keyboardType(.numberPad)
-                            .textFieldStyle(.roundedBorder)
-                        TextField("Final Pulse", value: $finalPulse, format: .number)
-                            .keyboardType(.numberPad)
-                            .textFieldStyle(.roundedBorder)
+                        VStack(alignment: .leading, spacing: 8) {
+                            FormInputLabel(title: "Final SpO2")
+                            TextField("Final SpO2", value: $finalSaturation, format: .number)
+                                .keyboardType(.numberPad)
+                                .focused($focusedField, equals: .finalSaturation)
+                                .formInputSurface()
+                        }
+                        VStack(alignment: .leading, spacing: 8) {
+                            FormInputLabel(title: "Final Pulse")
+                            TextField("Final Pulse", value: $finalPulse, format: .number)
+                                .keyboardType(.numberPad)
+                                .focused($focusedField, equals: .finalPulse)
+                                .formInputSurface()
+                        }
                     }
                 }
             }
 
             CardSurface(title: "Reason", systemImage: "list.bullet.clipboard") {
                 TextField("Why did you start the session?", text: $reason)
-                    .textFieldStyle(.roundedBorder)
+                    .focused($focusedField, equals: .reason)
+                    .textInputAutocapitalization(.sentences)
+                    .submitLabel(.next)
+                    .onSubmit { focusedField = .note }
+                    .formInputSurface()
             }
 
             CardSurface(title: "Notes", systemImage: "note.text") {
                 TextField("Optional note", text: $note, axis: .vertical)
                     .lineLimit(4...)
-                    .textFieldStyle(.roundedBorder)
+                    .focused($focusedField, equals: .note)
+                    .textInputAutocapitalization(.sentences)
+                    .formInputSurface(minHeight: 120)
             }
 
             Button("Save Session", systemImage: "tray.and.arrow.down", action: saveSession)
@@ -71,9 +105,23 @@ struct VentilationLogFormView: View {
                     .foregroundStyle(.secondary)
             }
         }
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") {
+                    focusedField = nil
+                }
+            }
+        }
+        .simultaneousGesture(
+            TapGesture().onEnded {
+                focusedField = nil
+            }
+        )
     }
 
     private func saveSession() {
+        focusedField = nil
         let session = VentilationSession(
             startTime: startTime,
             endTime: includeEndTime ? endTime : nil,
@@ -107,5 +155,6 @@ struct VentilationLogFormView: View {
         finalPulse = 84
         reason = ""
         note = ""
+        focusedField = .initialSaturation
     }
 }
