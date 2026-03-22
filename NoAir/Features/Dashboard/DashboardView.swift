@@ -107,6 +107,8 @@ struct DashboardView: View {
                         labs: labs
                     )
 
+                    ReadingReminderCardView(latestReadingDate: latestReading?.timestamp)
+
                     CardSurface(title: "Trend", systemImage: "chart.xyaxis.line") {
                         if chartReadings.count > 1 {
                             Chart(chartReadings) { reading in

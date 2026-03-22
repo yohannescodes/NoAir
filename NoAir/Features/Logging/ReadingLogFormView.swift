@@ -19,6 +19,7 @@ struct ReadingLogFormView: View {
 
     private let symptomColumns = [GridItem(.flexible()), GridItem(.flexible())]
     private let contextColumns = [GridItem(.flexible()), GridItem(.flexible())]
+    private let reminderService = ReadingReminderService()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -122,6 +123,13 @@ struct ReadingLogFormView: View {
         resetForm()
 
         Task {
+            if UserDefaults.standard.bool(forKey: ReadingReminderService.enabledKey) {
+                _ = try? await reminderService.schedule(
+                    intervalMinutes: UserDefaults.standard.integer(forKey: ReadingReminderService.intervalMinutesKey),
+                    anchorDate: reading.timestamp
+                )
+            }
+
             let enrichment = await readingEnricher.enrichReading()
             reading.apply(enrichment)
             try? modelContext.save()

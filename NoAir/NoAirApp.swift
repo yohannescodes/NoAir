@@ -3,6 +3,8 @@ import SwiftData
 
 @main
 struct NoAirApp: App {
+    @UIApplicationDelegateAdaptor(AppNotificationDelegate.self) private var appNotificationDelegate
+
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             ReadingRecord.self,
