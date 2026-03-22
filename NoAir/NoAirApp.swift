@@ -1,18 +1,16 @@
-//
-//  NoAirApp.swift
-//  NoAir
-//
-//  Created by Yohannes Haile on 21/03/2026.
-//
-
 import SwiftUI
 import SwiftData
 
 @main
 struct NoAirApp: App {
+    @UIApplicationDelegateAdaptor(AppNotificationDelegate.self) private var appNotificationDelegate
+
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
-            Item.self,
+            ReadingRecord.self,
+            VentilationSession.self,
+            TreatmentEvent.self,
+            LabResultRecord.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
@@ -26,6 +24,8 @@ struct NoAirApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .preferredColorScheme(.dark)
+                .tint(.mint)
         }
         .modelContainer(sharedModelContainer)
     }
