@@ -14,7 +14,6 @@ struct DashboardView: View {
     @Query(sort: \TreatmentEvent.timestamp, order: .reverse) private var treatments: [TreatmentEvent]
 
     private let statsColumns = [GridItem(.flexible()), GridItem(.flexible())]
-    private let quickActionColumns = [GridItem(.flexible()), GridItem(.flexible())]
     @State private var isRefreshingContext = false
 
     var body: some View {
@@ -22,23 +21,6 @@ struct DashboardView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     DisclaimerCardView()
-
-                    CardSurface(title: "Quick Add", systemImage: "plus.circle") {
-                        LazyVGrid(columns: quickActionColumns, spacing: 12) {
-                            QuickActionTileView(title: "Reading", systemImage: "waveform.path.ecg") {
-                                openLog(kind: .reading)
-                            }
-                            QuickActionTileView(title: "Ventilation", systemImage: "wind") {
-                                openLog(kind: .ventilation)
-                            }
-                            QuickActionTileView(title: "Treatment", systemImage: "cross.vial") {
-                                openLog(kind: .treatment)
-                            }
-                            QuickActionTileView(title: "Lab Result", systemImage: "testtube.2") {
-                                openLog(kind: .lab)
-                            }
-                        }
-                    }
 
                     dashboardHero
 
@@ -198,11 +180,6 @@ struct DashboardView: View {
 
     private var supportSummary: String {
         "Configure reminder cadence and generate Gemini commentary from your recent logs."
-    }
-
-    private func openLog(kind: LogEntryKind) {
-        selectedLogKind = kind
-        selectedTab = .log
     }
 
     private func refreshLatestReadingContext() {
