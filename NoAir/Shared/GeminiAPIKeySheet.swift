@@ -5,6 +5,7 @@ struct GeminiAPIKeySheet: View {
 
     @Binding var apiKey: String
     @State private var draftKey: String
+    @FocusState private var isKeyFieldFocused: Bool
 
     init(apiKey: Binding<String>) {
         _apiKey = apiKey
@@ -13,18 +14,28 @@ struct GeminiAPIKeySheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Gemini API Key") {
-                    SecureField("Paste API key", text: $draftKey)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
+            ScrollView {
+                VStack(alignment: .leading, spacing: Spacing.lg) {
+                    NACard(title: "Gemini API Key", systemImage: "sparkles") {
+                        VStack(alignment: .leading, spacing: Spacing.md) {
+                            NAFormField(label: "API Key", isFocused: isKeyFieldFocused) {
+                                SecureField("Paste API key", text: $draftKey)
+                                    .textInputAutocapitalization(.never)
+                                    .autocorrectionDisabled()
+                                    .focused($isKeyFieldFocused)
+                            }
 
-                    Text("Stored locally on this device. Needed only for Gemini commentary generation.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                            Text("Stored locally on this device. Needed only for Gemini commentary generation.")
+                                .font(Typography.caption)
+                                .foregroundStyle(Theme.textSecondary)
+                        }
+                    }
                 }
+                .padding(Spacing.lg)
             }
+            .background(Theme.background)
             .navigationTitle("Gemini")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel", action: dismiss.callAsFunction)
@@ -34,6 +45,8 @@ struct GeminiAPIKeySheet: View {
                 }
             }
         }
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
     }
 
     private func save() {

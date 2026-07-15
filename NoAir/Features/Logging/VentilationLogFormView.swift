@@ -27,92 +27,99 @@ struct VentilationLogFormView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            CardSurface(title: "Ventilation Session", systemImage: "wind") {
-                VStack(alignment: .leading, spacing: 16) {
-                    DatePicker("Start", selection: $startTime)
-                        .formInputSurface()
+        VStack(alignment: .leading, spacing: Spacing.xl) {
+            NACard(title: "Ventilation Session", systemImage: "wind", iconTint: Theme.ventilation) {
+                VStack(alignment: .leading, spacing: Spacing.lg) {
+                    NAFormField(label: "Start") {
+                        DatePicker("Start", selection: $startTime)
+                            .labelsHidden()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
                     Toggle("Set end time", isOn: $includeEndTime)
+                        .font(Typography.bodyEmphasized)
+                        .foregroundStyle(Theme.textPrimary)
+                        .tint(Theme.ventilation)
+
                     if includeEndTime {
-                        DatePicker("End", selection: $endTime, in: startTime...)
-                            .formInputSurface()
+                        NAFormField(label: "End") {
+                            DatePicker("End", selection: $endTime, in: startTime...)
+                                .labelsHidden()
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                     }
                 }
             }
 
-            CardSurface(title: "Before / After", systemImage: "waveform.path.ecg.rectangle") {
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack(spacing: 16) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            FormInputLabel(title: "Initial SpO2")
+            NACard(title: "Before / After", systemImage: "waveform.path.ecg.rectangle", iconTint: Theme.ventilation) {
+                VStack(alignment: .leading, spacing: Spacing.lg) {
+                    HStack(alignment: .top, spacing: Spacing.lg) {
+                        NAFormField(label: "Initial SpO2", isFocused: focusedField == .initialSaturation) {
                             TextField("Initial SpO2", value: $initialSaturation, format: .number)
+                                .font(Typography.metric)
+                                .foregroundStyle(Theme.textPrimary)
                                 .keyboardType(.numberPad)
                                 .focused($focusedField, equals: .initialSaturation)
-                                .formInputSurface()
                         }
-                        VStack(alignment: .leading, spacing: 8) {
-                            FormInputLabel(title: "Initial Pulse")
+                        NAFormField(label: "Initial Pulse", isFocused: focusedField == .initialPulse) {
                             TextField("Initial Pulse", value: $initialPulse, format: .number)
+                                .font(Typography.metric)
+                                .foregroundStyle(Theme.textPrimary)
                                 .keyboardType(.numberPad)
                                 .focused($focusedField, equals: .initialPulse)
-                                .formInputSurface()
                         }
                     }
 
-                    HStack(spacing: 16) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            FormInputLabel(title: "Final SpO2")
+                    HStack(alignment: .top, spacing: Spacing.lg) {
+                        NAFormField(label: "Final SpO2", isFocused: focusedField == .finalSaturation) {
                             TextField("Final SpO2", value: $finalSaturation, format: .number)
+                                .font(Typography.metric)
+                                .foregroundStyle(Theme.textPrimary)
                                 .keyboardType(.numberPad)
                                 .focused($focusedField, equals: .finalSaturation)
-                                .formInputSurface()
                         }
-                        VStack(alignment: .leading, spacing: 8) {
-                            FormInputLabel(title: "Final Pulse")
+                        NAFormField(label: "Final Pulse", isFocused: focusedField == .finalPulse) {
                             TextField("Final Pulse", value: $finalPulse, format: .number)
+                                .font(Typography.metric)
+                                .foregroundStyle(Theme.textPrimary)
                                 .keyboardType(.numberPad)
                                 .focused($focusedField, equals: .finalPulse)
-                                .formInputSurface()
                         }
                     }
                 }
             }
 
-            CardSurface(title: "Reason", systemImage: "list.bullet.clipboard") {
-                TextField("Why did you start the session?", text: $reason)
-                    .focused($focusedField, equals: .reason)
-                    .textInputAutocapitalization(.sentences)
-                    .submitLabel(.next)
-                    .onSubmit { focusedField = .note }
-                    .formInputSurface()
+            NACard(title: "Reason", systemImage: "list.bullet.clipboard", iconTint: Theme.ventilation) {
+                NAFormField(label: "Reason", isFocused: focusedField == .reason) {
+                    TextField("Why did you start the session?", text: $reason)
+                        .focused($focusedField, equals: .reason)
+                        .textInputAutocapitalization(.sentences)
+                        .submitLabel(.next)
+                        .onSubmit { focusedField = .note }
+                }
             }
 
-            CardSurface(title: "Notes", systemImage: "note.text") {
-                TextField("Optional note", text: $note, axis: .vertical)
-                    .lineLimit(4...)
-                    .focused($focusedField, equals: .note)
-                    .textInputAutocapitalization(.sentences)
-                    .formInputSurface(minHeight: 120)
+            NACard(title: "Notes", systemImage: "note.text", iconTint: Theme.ventilation) {
+                NAFormField(label: "Note", isFocused: focusedField == .note) {
+                    TextField("Optional note", text: $note, axis: .vertical)
+                        .lineLimit(4...)
+                        .focused($focusedField, equals: .note)
+                        .textInputAutocapitalization(.sentences)
+                }
             }
 
-            Button("Save Session", systemImage: "tray.and.arrow.down", action: saveSession)
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
+            Button(action: saveSession) {
+                Label("Save Session", systemImage: "tray.and.arrow.down")
+            }
+            .buttonStyle(NAPrimaryButtonStyle(tint: Theme.ventilation, edge: Theme.ventilation.opacity(0.55)))
 
             if !saveStatus.isEmpty {
                 Text(saveStatus)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .font(Typography.caption)
+                    .foregroundStyle(Theme.textSecondary)
             }
         }
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("Done") {
-                    focusedField = nil
-                }
-            }
-        }
+        .keyboardDoneToolbar(focus: $focusedField)
         .simultaneousGesture(
             TapGesture().onEnded {
                 focusedField = nil
@@ -125,12 +132,12 @@ struct VentilationLogFormView: View {
         let session = VentilationSession(
             startTime: startTime,
             endTime: includeEndTime ? endTime : nil,
-            initialSaturation: min(max(initialSaturation, 50), 100),
-            initialPulse: min(max(initialPulse, 20), 250),
-            finalSaturation: min(max(finalSaturation, 50), 100),
-            finalPulse: min(max(finalPulse, 20), 250),
-            reason: clean(reason),
-            note: clean(note)
+            initialSaturation: FormSupport.clampSpO2(initialSaturation),
+            initialPulse: FormSupport.clampPulse(initialPulse),
+            finalSaturation: FormSupport.clampSpO2(finalSaturation),
+            finalPulse: FormSupport.clampPulse(finalPulse),
+            reason: FormSupport.clean(reason),
+            note: FormSupport.clean(note)
         )
 
         modelContext.insert(session)
@@ -138,11 +145,6 @@ struct VentilationLogFormView: View {
         saveStatus = "Ventilation session saved."
         onSaved(.ventilation(session), .ventilation)
         resetForm()
-    }
-
-    private func clean(_ text: String) -> String? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
     }
 
     private func resetForm() {

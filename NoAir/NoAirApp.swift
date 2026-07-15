@@ -5,6 +5,17 @@ import SwiftData
 struct NoAirApp: App {
     @UIApplicationDelegateAdaptor(AppNotificationDelegate.self) private var appNotificationDelegate
 
+    @State private var healthKitService: HealthKitService
+    @State private var healthDataProvider: HealthDataProvider
+    private let readingEnricher: ReadingEnricher
+
+    init() {
+        let service = HealthKitService()
+        _healthKitService = State(initialValue: service)
+        _healthDataProvider = State(initialValue: HealthDataProvider(healthKit: service))
+        readingEnricher = ReadingEnricher(healthKitService: service)
+    }
+
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             ReadingRecord.self,
@@ -23,9 +34,10 @@ struct NoAirApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .preferredColorScheme(.dark)
-                .tint(.mint)
+            ContentView(readingEnricher: readingEnricher)
+                .tint(Theme.accent)
+                .environment(healthKitService)
+                .environment(healthDataProvider)
         }
         .modelContainer(sharedModelContainer)
     }

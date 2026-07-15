@@ -19,6 +19,7 @@ final class ReadingRecord {
     var activityStepsLastHour: Int?
     var activeEnergyToday: Double?
     var recentWorkout: String?
+    var healthKitExportedAt: Date?
     var createdAt: Date
     var updatedAt: Date
 
@@ -39,6 +40,7 @@ final class ReadingRecord {
         activityStepsLastHour: Int? = nil,
         activeEnergyToday: Double? = nil,
         recentWorkout: String? = nil,
+        healthKitExportedAt: Date? = nil,
         createdAt: Date = .now,
         updatedAt: Date = .now
     ) {
@@ -58,6 +60,7 @@ final class ReadingRecord {
         self.activityStepsLastHour = activityStepsLastHour
         self.activeEnergyToday = activeEnergyToday
         self.recentWorkout = recentWorkout
+        self.healthKitExportedAt = healthKitExportedAt
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }

@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct AICommentaryCardView: View {
+    @Environment(HealthDataProvider.self) private var healthDataProvider
+
     let readings: [ReadingRecord]
     let ventilations: [VentilationSession]
     let treatments: [TreatmentEvent]
@@ -34,16 +36,16 @@ struct AICommentaryCardView: View {
     }
 
     var body: some View {
-        CardSurface(title: "AI Commentary", systemImage: "sparkles") {
+        NACard(title: "AI Commentary", systemImage: "sparkles") {
             VStack(alignment: .leading, spacing: 14) {
                 Text("Gemini summarizes the recent logs and available context in descriptive language only. No diagnosis, treatment, or emergency guidance.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
-                if motionContextMissing {
-                    Text("Motion context is still unavailable, so commentary will rely on manual logs, ventilation, treatments, labs, and environment only.")
-                        .font(.footnote)
-                        .foregroundStyle(.orange)
+                if activityContextMissing {
+                    Text("Activity context is unavailable — connect Apple Health so commentary can use steps, energy, and workouts.")
+                        .font(Typography.caption)
+                        .foregroundStyle(Theme.warning)
                 }
 
                 if !cachedCommentary.isEmpty {
@@ -76,7 +78,7 @@ struct AICommentaryCardView: View {
                         generateCommentary()
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(isGenerating || readings.isEmpty || apiKey.isEmpty)
+                    .disabled(isGenerating || !hasAnyData || apiKey.isEmpty)
                 }
             }
         }
@@ -93,8 +95,16 @@ struct AICommentaryCardView: View {
         generatedAtTimestamp > 0 ? Date(timeIntervalSince1970: generatedAtTimestamp) : nil
     }
 
-    private var motionContextMissing: Bool {
-        !readings.contains { $0.activityStepsLastHour != nil || $0.recentWorkout != nil || $0.activeEnergyToday != nil }
+    /// Activity now comes live from Apple Health; only warn when Health isn't
+    /// connected AND no reading carries stored activity either.
+    private var activityContextMissing: Bool {
+        guard !healthDataProvider.isConnected else { return false }
+        return !readings.contains { $0.activityStepsLastHour != nil || $0.recentWorkout != nil || $0.activeEnergyToday != nil }
+    }
+
+    /// Commentary can run on watch data alone — manual logs are no longer required.
+    private var hasAnyData: Bool {
+        !readings.isEmpty || healthDataProvider.isConnected
     }
 
     private var currentLogsSignature: String {
@@ -115,8 +125,27 @@ struct AICommentaryCardView: View {
             "r[\(readingSignature)]",
             "v[\(ventilationSignature)]",
             "t[\(treatmentSignature)]",
-            "l[\(labSignature)]"
+            "l[\(labSignature)]",
+            "w[\(watchSignature)]"
         ].joined(separator: "#")
+    }
+
+    /// Coarse fingerprint of the watch data: changes when the day's SpO2 range,
+    /// cardiac values, sleep, or heart events change — not on every new sample,
+    /// so auto-regeneration stays infrequent.
+    private var watchSignature: String {
+        guard healthDataProvider.isConnected else { return "off" }
+        let vitals = healthDataProvider.todayVitals
+        let parts: [String] = [
+            vitals.map { "\($0.spo2Min ?? -1)-\($0.spo2Max ?? -1)-\($0.spo2Average ?? -1)" } ?? "novitals",
+            healthDataProvider.restingHeartRate.map { "\(Int($0.value.rounded()))" } ?? "-",
+            healthDataProvider.hrvSDNN.map { "\(Int($0.value.rounded()))" } ?? "-",
+            healthDataProvider.vo2Max.map { "\(Int($0.value.rounded()))" } ?? "-",
+            healthDataProvider.respiratoryRate.map { "\(Int($0.value.rounded()))" } ?? "-",
+            healthDataProvider.lastNightSleep.map { "\(Int($0.totalAsleep / 60))" } ?? "-",
+            "\(healthDataProvider.recentHeartEvents.count)",
+        ]
+        return parts.joined(separator: ":")
     }
 
     private var autoGenerationTaskID: String {
@@ -125,7 +154,15 @@ struct AICommentaryCardView: View {
 
     @MainActor
     private func generateCommentaryIfNeeded() async {
-        guard !apiKey.isEmpty, !readings.isEmpty else { return }
+        guard !apiKey.isEmpty, hasAnyData else { return }
+
+        // Don't generate off a half-loaded snapshot: if Health is connected but
+        // the first refresh hasn't landed yet, wait for it. The signature task
+        // re-fires when the data arrives.
+        if healthDataProvider.isConnected && healthDataProvider.lastRefreshed == nil {
+            return
+        }
+
         guard cachedLogsSignature != currentLogsSignature || cachedCommentary.isEmpty else { return }
         await generateCommentary(trigger: .automatic)
     }
@@ -143,11 +180,30 @@ struct AICommentaryCardView: View {
         statusMessage = trigger == .automatic ? "Refreshing commentary for the latest logs…" : ""
         isGenerating = true
 
+        // A manual tap should never run against an empty Health snapshot.
+        if healthDataProvider.isConnected && healthDataProvider.lastRefreshed == nil {
+            await healthDataProvider.refresh()
+        }
+
+        let watchContext: WatchVitalsPromptContext? = healthDataProvider.isConnected
+            ? WatchVitalsPromptContext(
+                todayVitals: healthDataProvider.todayVitals,
+                restingHeartRate: healthDataProvider.restingHeartRate?.value,
+                hrvSDNN: healthDataProvider.hrvSDNN?.value,
+                vo2Max: healthDataProvider.vo2Max?.value,
+                respiratoryRate: healthDataProvider.respiratoryRate?.value,
+                sleepSummary: healthDataProvider.lastNightSleep?.totalAsleepFormatted,
+                heartEvents: healthDataProvider.recentHeartEvents,
+                activity: healthDataProvider.todayActivity
+            )
+            : nil
+
         let prompt = promptBuilder.buildPrompt(
             readings: readings,
             ventilations: ventilations,
             treatments: treatments,
-            labs: labs
+            labs: labs,
+            watch: watchContext
         )
 
         do {

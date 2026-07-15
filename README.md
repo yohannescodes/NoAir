@@ -28,11 +28,12 @@ These screens show the app’s main flow: quick situational awareness on the das
 
 ## What The App Does
 
-The current app ships with three primary surfaces:
+The current app ships with four primary surfaces:
 
-- `Dashboard`: daily stats, current snapshot, trends, context summaries, reminders, and AI commentary
+- `Home`: SpO2 ring gauge for the latest reading, logging streak, daily stats, cardiac/sleep vitals from Apple Health, context summaries, reminders, and AI commentary
+- `Trends`: SpO2 history (manual readings over the watch's passive samples), overnight SpO2 + heart rate with sleep stages, and a cardiac panel (resting HR, HRV, VO2 max, respiratory rate, heart-rhythm notifications)
 - `Quick Log`: fast entry flows for readings, ventilation sessions, treatments, and lab results
-- `Timeline`: reverse-chronological history with filters, editing, and deletion
+- `Timeline`: reverse-chronological history with filters, editing, and deletion, plus per-day Apple Watch summaries
 
 Persisted records currently include:
 
@@ -54,10 +55,17 @@ Persisted records currently include:
 Saved readings can be enriched with passive context when permissions and network access are available:
 
 - location for locality and altitude
-- motion activity for recent movement context
+- Apple Health for steps, active energy, and recent workouts
 - weather from Open-Meteo for temperature, humidity, and conditions
 
 NoAir also supports recurring local notification reminders for logging the next reading.
+
+## Apple Health Integration
+
+NoAir syncs two ways with Apple Health:
+
+- **Import**: watch SpO2 and heart rate (merged into insights, charts, and timeline day summaries), resting heart rate, HRV (SDNN), VO2 max, respiratory rate, sleep stages, irregular/high/low heart-rate notifications, and activity data. HealthKit stays the source of truth — passive samples are never copied into the app's database.
+- **Export**: manually logged SpO2 and pulse readings are written to Health with sync identifiers, so edits and deletions in NoAir update or remove the corresponding Health samples. Manual entries matter here: they capture saturation values below the watch's measurable range.
 
 ## AI Commentary
 
@@ -77,10 +85,13 @@ NoAir/
 │   ├── Features/
 │   │   ├── Dashboard/
 │   │   ├── Logging/
-│   │   └── Timeline/
+│   │   ├── Timeline/
+│   │   └── Trends/
 │   ├── Models/
 │   ├── Services/
 │   ├── Shared/
+│   │   ├── DesignSystem/
+│   │   └── Forms/
 │   ├── Assets.xcassets/
 │   ├── ContentView.swift
 │   └── NoAirApp.swift
@@ -97,8 +108,8 @@ NoAir/
 - SwiftUI
 - SwiftData
 - Charts
+- HealthKit
 - Core Location
-- Core Motion
 - UserNotifications
 - Open-Meteo API
 - Gemini API
@@ -109,7 +120,8 @@ NoAir/
 - iPhone or iPad simulator/device compatible with the configured target
 - network access for weather lookup and Gemini commentary
 - notification permission for reminders
-- location and motion permission for context enrichment
+- location permission for context enrichment
+- Apple Health read/write access for watch data and reading export (watch-originated data requires a paired Apple Watch)
 
 ## Running The App
 

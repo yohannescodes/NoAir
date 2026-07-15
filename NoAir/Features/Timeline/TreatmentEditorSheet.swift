@@ -10,6 +10,11 @@ struct TreatmentEditorSheet: View {
     @State private var timestamp: Date
     @State private var selectedType: TreatmentType
     @State private var note: String
+    @FocusState private var focusedField: Field?
+
+    private enum Field: Hashable {
+        case note
+    }
 
     init(treatment: TreatmentEvent) {
         self.treatment = treatment
@@ -20,17 +25,49 @@ struct TreatmentEditorSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                DatePicker("Timestamp", selection: $timestamp)
-                Picker("Type", selection: $selectedType) {
-                    ForEach(TreatmentType.allCases) { type in
-                        Text(type.rawValue).tag(type)
+            ScrollView {
+                VStack(alignment: .leading, spacing: Spacing.xl) {
+                    NACard(title: "Treatment Event", systemImage: "cross.vial", iconTint: Theme.treatment) {
+                        VStack(alignment: .leading, spacing: Spacing.lg) {
+                            NAFormField(label: "Timestamp") {
+                                DatePicker("Timestamp", selection: $timestamp)
+                                    .labelsHidden()
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+
+                            VStack(alignment: .leading, spacing: Spacing.sm) {
+                                Text("Type")
+                                    .font(Typography.captionEmphasized)
+                                    .foregroundStyle(Theme.textSecondary)
+                                    .textCase(.uppercase)
+
+                                NAChipBar(
+                                    options: TreatmentType.allCases,
+                                    selection: $selectedType,
+                                    tint: Theme.treatment
+                                ) { type in
+                                    type.rawValue
+                                }
+                            }
+                        }
+                    }
+
+                    NACard(title: "Details", systemImage: "square.and.pencil", iconTint: Theme.treatment) {
+                        NAFormField(label: "Note", isFocused: focusedField == .note) {
+                            TextField("Note", text: $note, axis: .vertical)
+                                .lineLimit(4...)
+                                .focused($focusedField, equals: .note)
+                                .textInputAutocapitalization(.sentences)
+                        }
                     }
                 }
-                TextField("Note", text: $note, axis: .vertical)
-                    .lineLimit(4...)
+                .padding()
             }
+            .background(Theme.background)
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Edit Treatment")
+            .navigationBarTitleDisplayMode(.inline)
+            .keyboardDoneToolbar(focus: $focusedField)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel", action: dismiss.callAsFunction)
@@ -40,6 +77,8 @@ struct TreatmentEditorSheet: View {
                 }
             }
         }
+        .presentationDragIndicator(.visible)
+        .presentationBackground(Theme.background)
     }
 
     private func save() {

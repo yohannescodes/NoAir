@@ -9,20 +9,32 @@ struct TreatmentLogFormView: View {
     @State private var selectedType: TreatmentType = .medication
     @State private var note = ""
     @State private var saveStatus = ""
-    @FocusState private var isNoteFocused: Bool
+    @FocusState private var focusedField: Field?
+
+    private enum Field: Hashable {
+        case note
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            CardSurface(title: "Treatment Event", systemImage: "cross.vial") {
-                VStack(alignment: .leading, spacing: 16) {
-                    DatePicker("Timestamp", selection: $timestamp)
-                        .formInputSurface()
+        VStack(alignment: .leading, spacing: Spacing.xl) {
+            NACard(title: "Treatment Event", systemImage: "cross.vial", iconTint: Theme.treatment) {
+                VStack(alignment: .leading, spacing: Spacing.lg) {
+                    NAFormField(label: "Timestamp") {
+                        DatePicker("Timestamp", selection: $timestamp)
+                            .labelsHidden()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
 
-                    VStack(alignment: .leading, spacing: 10) {
-                        FormInputLabel(title: "Type")
-                        SelectionChipBar(
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                        Text("Type")
+                            .font(Typography.captionEmphasized)
+                            .foregroundStyle(Theme.textSecondary)
+                            .textCase(.uppercase)
+
+                        NAChipBar(
                             options: TreatmentType.allCases,
-                            selection: $selectedType
+                            selection: $selectedType,
+                            tint: Theme.treatment
                         ) { type in
                             type.rawValue
                         }
@@ -30,43 +42,37 @@ struct TreatmentLogFormView: View {
                 }
             }
 
-            CardSurface(title: "Details", systemImage: "square.and.pencil") {
-                TextField("Medication, dose, visit summary, adjustment details", text: $note, axis: .vertical)
-                    .lineLimit(4...)
-                    .focused($isNoteFocused)
-                    .textInputAutocapitalization(.sentences)
-                    .formInputSurface(minHeight: 128)
+            NACard(title: "Details", systemImage: "square.and.pencil", iconTint: Theme.treatment) {
+                NAFormField(label: "Note", isFocused: focusedField == .note) {
+                    TextField("Medication, dose, visit summary, adjustment details", text: $note, axis: .vertical)
+                        .lineLimit(4...)
+                        .focused($focusedField, equals: .note)
+                        .textInputAutocapitalization(.sentences)
+                }
             }
 
-            Button("Save Treatment", systemImage: "tray.and.arrow.down", action: saveTreatment)
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
+            Button(action: saveTreatment) {
+                Label("Save Treatment", systemImage: "tray.and.arrow.down")
+            }
+            .buttonStyle(NAPrimaryButtonStyle(tint: Theme.treatment, edge: Theme.treatment.opacity(0.55)))
 
             if !saveStatus.isEmpty {
                 Text(saveStatus)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .font(Typography.caption)
+                    .foregroundStyle(Theme.textSecondary)
             }
         }
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("Done") {
-                    isNoteFocused = false
-                }
-            }
-        }
+        .keyboardDoneToolbar(focus: $focusedField)
         .simultaneousGesture(
             TapGesture().onEnded {
-                isNoteFocused = false
+                focusedField = nil
             }
         )
     }
 
     private func saveTreatment() {
-        isNoteFocused = false
-        let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
+        focusedField = nil
+        guard let trimmed = FormSupport.clean(note) else {
             saveStatus = "Treatment notes are required so the event is understandable later."
             return
         }

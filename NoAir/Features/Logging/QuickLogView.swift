@@ -10,15 +10,16 @@ struct QuickLogView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: Spacing.xl) {
                     DisclaimerCardView()
 
-                    VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
                         Text("Entry Type")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.secondary)
+                            .font(Typography.captionEmphasized)
+                            .foregroundStyle(Theme.textSecondary)
+                            .textCase(.uppercase)
 
-                        SelectionChipBar(
+                        NAChipBar(
                             options: LogEntryKind.allCases,
                             selection: $selectedLogKind
                         ) { kind in
@@ -39,6 +40,8 @@ struct QuickLogView: View {
                 }
                 .padding()
             }
+            .background(Theme.background)
+            .scrollContentBackground(.hidden)
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Quick Log")
         }

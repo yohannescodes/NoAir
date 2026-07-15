@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ReadingLogFormView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(HealthKitService.self) private var healthKitService
 
     let readingEnricher: ReadingEnricher
     let onSaved: (TimelineEditorRoute, TimelineFilter) -> Void
@@ -16,6 +17,7 @@ struct ReadingLogFormView: View {
     @State private var note = ""
     @State private var onVentilation = false
     @State private var saveStatus = ""
+    @State private var saveCount = 0
 
     private let reminderService = ReadingReminderService()
     @FocusState private var focusedField: Field?
@@ -28,101 +30,111 @@ struct ReadingLogFormView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            CardSurface(title: "Quick Reading", systemImage: "waveform.path.ecg") {
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack(spacing: 16) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            FormInputLabel(title: "SpO2")
+        VStack(alignment: .leading, spacing: Spacing.xl) {
+            NACard(title: "Quick Reading", systemImage: "waveform.path.ecg", iconTint: Theme.accent) {
+                VStack(alignment: .leading, spacing: Spacing.lg) {
+                    HStack(alignment: .top, spacing: Spacing.lg) {
+                        NAFormField(label: "SpO2", isFocused: focusedField == .spo2) {
                             TextField("SpO2", value: $spo2, format: .number)
-                                .font(.system(.largeTitle, design: .rounded).weight(.bold))
+                                .font(Typography.metricLarge)
+                                .foregroundStyle(Theme.textPrimary)
                                 .keyboardType(.numberPad)
                                 .focused($focusedField, equals: .spo2)
-                                .formInputSurface(minHeight: 74)
+                                .frame(minHeight: 44)
                         }
 
-                        VStack(alignment: .leading, spacing: 8) {
-                            Toggle("Pulse", isOn: $includePulse)
-                                .font(.subheadline.weight(.semibold))
+                        NAFormField(label: "Pulse", isFocused: focusedField == .pulse) {
                             if includePulse {
                                 TextField("Pulse", value: $pulse, format: .number)
-                                    .font(.title.weight(.semibold))
+                                    .font(Typography.metricLarge)
+                                    .foregroundStyle(Theme.textPrimary)
                                     .keyboardType(.numberPad)
                                     .focused($focusedField, equals: .pulse)
-                                    .formInputSurface(minHeight: 74)
+                                    .frame(minHeight: 44)
                             } else {
                                 Text("Optional")
-                                    .foregroundStyle(.secondary)
-                                    .formInputSurface(minHeight: 74)
+                                    .foregroundStyle(Theme.textTertiary)
+                                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                             }
                         }
                     }
 
-                    DatePicker("Timestamp", selection: $timestamp)
-                        .formInputSurface()
+                    Toggle("Include pulse", isOn: $includePulse)
+                        .font(Typography.bodyEmphasized)
+                        .foregroundStyle(Theme.textPrimary)
+                        .tint(Theme.accent)
+
+                    NAFormField(label: "Timestamp") {
+                        DatePicker("Timestamp", selection: $timestamp)
+                            .labelsHidden()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
                     Toggle("On ventilation", isOn: $onVentilation)
+                        .font(Typography.bodyEmphasized)
+                        .foregroundStyle(Theme.textPrimary)
+                        .tint(Theme.accent)
                 }
             }
 
-            CardSurface(title: "Context", systemImage: "bolt.horizontal") {
-                VStack(alignment: .leading, spacing: 12) {
+            NACard(title: "Context", systemImage: "bolt.horizontal", iconTint: Theme.accent) {
+                VStack(alignment: .leading, spacing: Spacing.md) {
                     ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 10) {
-                        ForEach(ReadingContextTag.allCases) { tag in
-                                TagToggleChip(label: tag.rawValue, isSelected: context == tag.rawValue, fillsWidth: false) {
-                                context = context == tag.rawValue ? "" : tag.rawValue
+                        HStack(spacing: Spacing.sm) {
+                            ForEach(ReadingContextTag.allCases) { tag in
+                                NAChip(title: tag.rawValue, isSelected: context == tag.rawValue) {
+                                    context = context == tag.rawValue ? "" : tag.rawValue
+                                }
                             }
                         }
-                    }
+                        .padding(.vertical, 2)
                     }
 
-                    TextField("Custom context", text: $context)
-                        .focused($focusedField, equals: .context)
-                        .textInputAutocapitalization(.sentences)
-                        .submitLabel(.next)
-                        .onSubmit { focusedField = .note }
-                        .formInputSurface()
+                    NAFormField(label: "Custom context", isFocused: focusedField == .context) {
+                        TextField("Custom context", text: $context)
+                            .focused($focusedField, equals: .context)
+                            .textInputAutocapitalization(.sentences)
+                            .submitLabel(.next)
+                            .onSubmit { focusedField = .note }
+                    }
                 }
             }
 
-            CardSurface(title: "Symptoms", systemImage: "stethoscope") {
+            NACard(title: "Symptoms", systemImage: "stethoscope", iconTint: Theme.accent) {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 10) {
+                    HStack(spacing: Spacing.sm) {
                         ForEach(SymptomTag.allCases) { symptom in
-                            TagToggleChip(label: symptom.rawValue, isSelected: selectedSymptoms.contains(symptom), fillsWidth: false) {
+                            NAChip(title: symptom.rawValue, isSelected: selectedSymptoms.contains(symptom)) {
                                 toggleSymptom(symptom)
                             }
                         }
                     }
+                    .padding(.vertical, 2)
                 }
             }
 
-            CardSurface(title: "Notes", systemImage: "note.text") {
-                TextField("Add anything worth remembering", text: $note, axis: .vertical)
-                    .lineLimit(4...)
-                    .focused($focusedField, equals: .note)
-                    .textInputAutocapitalization(.sentences)
-                    .formInputSurface(minHeight: 120)
+            NACard(title: "Notes", systemImage: "note.text", iconTint: Theme.accent) {
+                NAFormField(label: "Note", isFocused: focusedField == .note) {
+                    TextField("Add anything worth remembering", text: $note, axis: .vertical)
+                        .lineLimit(4...)
+                        .focused($focusedField, equals: .note)
+                        .textInputAutocapitalization(.sentences)
+                }
             }
 
-            Button("Save Reading", systemImage: "tray.and.arrow.down", action: saveReading)
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
+            Button(action: saveReading) {
+                Label("Save Reading", systemImage: "tray.and.arrow.down")
+            }
+            .buttonStyle(NAPrimaryButtonStyle())
 
             if !saveStatus.isEmpty {
                 Text(saveStatus)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .font(Typography.caption)
+                    .foregroundStyle(Theme.textSecondary)
             }
         }
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("Done") {
-                    focusedField = nil
-                }
-            }
-        }
+        .keyboardDoneToolbar(focus: $focusedField)
+        .sensoryFeedback(.success, trigger: saveCount)
         .task {
             guard focusedField == nil else { return }
             focusedField = .spo2
@@ -146,17 +158,18 @@ struct ReadingLogFormView: View {
         focusedField = nil
         let reading = ReadingRecord(
             timestamp: timestamp,
-            spo2: min(max(spo2, 50), 100),
-            pulse: includePulse ? min(max(pulse, 20), 250) : nil,
-            context: clean(context),
+            spo2: FormSupport.clampSpO2(spo2),
+            pulse: includePulse ? FormSupport.clampPulse(pulse) : nil,
+            context: FormSupport.clean(context),
             symptoms: selectedSymptoms.map(\.rawValue).sorted(),
-            note: clean(note),
+            note: FormSupport.clean(note),
             onVentilation: onVentilation
         )
 
         modelContext.insert(reading)
         try? modelContext.save()
         saveStatus = "Reading saved. Weather, altitude, and activity will attach if permissions and data are available."
+        saveCount += 1
         onSaved(.reading(reading), .readings)
         resetForm()
 
@@ -170,13 +183,9 @@ struct ReadingLogFormView: View {
 
             let enrichment = await readingEnricher.enrichReading()
             reading.apply(enrichment)
+            try? await healthKitService.exportReading(reading)
             try? modelContext.save()
         }
-    }
-
-    private func clean(_ text: String) -> String? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
     }
 
     private func resetForm() {

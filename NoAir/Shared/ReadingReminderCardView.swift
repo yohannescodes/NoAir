@@ -18,7 +18,7 @@ struct ReadingReminderCardView: View {
     private let service = ReadingReminderService()
 
     var body: some View {
-        CardSurface(title: "Reading Reminder", systemImage: "bell.badge") {
+        NACard(title: "Reading Reminder", systemImage: "bell.badge") {
             VStack(alignment: .leading, spacing: 14) {
                 Text("Set a reminder interval for logging readings. Each saved reading resets the notification timer.")
                     .font(.subheadline)

@@ -24,17 +24,25 @@ struct LabResultLogFormView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            CardSurface(title: "Lab Result", systemImage: "testtube.2") {
-                VStack(alignment: .leading, spacing: 16) {
-                    DatePicker("Timestamp", selection: $timestamp)
-                        .formInputSurface()
+        VStack(alignment: .leading, spacing: Spacing.xl) {
+            NACard(title: "Lab Result", systemImage: "testtube.2", iconTint: Theme.lab) {
+                VStack(alignment: .leading, spacing: Spacing.lg) {
+                    NAFormField(label: "Timestamp") {
+                        DatePicker("Timestamp", selection: $timestamp)
+                            .labelsHidden()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
 
-                    VStack(alignment: .leading, spacing: 10) {
-                        FormInputLabel(title: "Lab")
-                        SelectionChipBar(
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                        Text("Lab")
+                            .font(Typography.captionEmphasized)
+                            .foregroundStyle(Theme.textSecondary)
+                            .textCase(.uppercase)
+
+                        NAChipBar(
                             options: LabKind.allCases,
-                            selection: $selectedKind
+                            selection: $selectedKind,
+                            tint: Theme.lab
                         ) { kind in
                             kind.rawValue
                         }
@@ -46,66 +54,60 @@ struct LabResultLogFormView: View {
                     }
 
                     if selectedKind == .custom {
-                        TextField("Custom lab name", text: $customLabName)
-                            .focused($focusedField, equals: .customLabName)
-                            .textInputAutocapitalization(.words)
-                            .submitLabel(.next)
-                            .onSubmit { focusedField = .value }
-                            .formInputSurface()
+                        NAFormField(label: "Custom lab name", isFocused: focusedField == .customLabName) {
+                            TextField("Custom lab name", text: $customLabName)
+                                .focused($focusedField, equals: .customLabName)
+                                .textInputAutocapitalization(.words)
+                                .submitLabel(.next)
+                                .onSubmit { focusedField = .value }
+                        }
                     }
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        FormInputLabel(title: "Value")
+                    NAFormField(label: "Value", isFocused: focusedField == .value) {
                         TextField("Value", value: $value, format: .number)
+                            .font(Typography.metric)
+                            .foregroundStyle(Theme.textPrimary)
                             .keyboardType(.decimalPad)
                             .focused($focusedField, equals: .value)
-                            .formInputSurface()
                     }
-                    VStack(alignment: .leading, spacing: 8) {
-                        FormInputLabel(title: "Unit")
+
+                    NAFormField(label: "Unit", isFocused: focusedField == .unit) {
                         TextField("Unit", text: $unit)
                             .focused($focusedField, equals: .unit)
                             .submitLabel(.next)
                             .onSubmit { focusedField = .referenceRange }
-                            .formInputSurface()
                     }
-                    VStack(alignment: .leading, spacing: 8) {
-                        FormInputLabel(title: "Reference range")
+
+                    NAFormField(label: "Reference range", isFocused: focusedField == .referenceRange) {
                         TextField("Reference range", text: $referenceRange)
                             .focused($focusedField, equals: .referenceRange)
                             .submitLabel(.next)
                             .onSubmit { focusedField = .note }
-                            .formInputSurface()
                     }
                 }
             }
 
-            CardSurface(title: "Notes", systemImage: "note.text") {
-                TextField("Optional note", text: $note, axis: .vertical)
-                    .lineLimit(4...)
-                    .focused($focusedField, equals: .note)
-                    .textInputAutocapitalization(.sentences)
-                    .formInputSurface(minHeight: 120)
+            NACard(title: "Notes", systemImage: "note.text", iconTint: Theme.lab) {
+                NAFormField(label: "Note", isFocused: focusedField == .note) {
+                    TextField("Optional note", text: $note, axis: .vertical)
+                        .lineLimit(4...)
+                        .focused($focusedField, equals: .note)
+                        .textInputAutocapitalization(.sentences)
+                }
             }
 
-            Button("Save Lab Result", systemImage: "tray.and.arrow.down", action: saveLab)
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
+            Button(action: saveLab) {
+                Label("Save Lab Result", systemImage: "tray.and.arrow.down")
+            }
+            .buttonStyle(NAPrimaryButtonStyle(tint: Theme.lab, edge: Theme.lab.opacity(0.55)))
 
             if !saveStatus.isEmpty {
                 Text(saveStatus)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .font(Typography.caption)
+                    .foregroundStyle(Theme.textSecondary)
             }
         }
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("Done") {
-                    focusedField = nil
-                }
-            }
-        }
+        .keyboardDoneToolbar(focus: $focusedField)
         .simultaneousGesture(
             TapGesture().onEnded {
                 focusedField = nil
@@ -125,9 +127,9 @@ struct LabResultLogFormView: View {
             labName: name,
             value: value,
             unit: unit.trimmingCharacters(in: .whitespacesAndNewlines),
-            referenceRange: clean(referenceRange),
+            referenceRange: FormSupport.clean(referenceRange),
             timestamp: timestamp,
-            note: clean(note)
+            note: FormSupport.clean(note)
         )
 
         modelContext.insert(result)
@@ -135,11 +137,6 @@ struct LabResultLogFormView: View {
         saveStatus = "Lab result saved."
         onSaved(.lab(result), .labs)
         resetForm()
-    }
-
-    private func clean(_ text: String) -> String? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
     }
 
     private func resetForm() {
