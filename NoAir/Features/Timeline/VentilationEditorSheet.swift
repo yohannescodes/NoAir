@@ -16,6 +16,16 @@ struct VentilationEditorSheet: View {
     @State private var finalPulse: Int
     @State private var reason: String
     @State private var note: String
+    @FocusState private var focusedField: Field?
+
+    private enum Field: Hashable {
+        case initialSaturation
+        case initialPulse
+        case finalSaturation
+        case finalPulse
+        case reason
+        case note
+    }
 
     init(session: VentilationSession) {
         self.session = session
@@ -32,25 +42,95 @@ struct VentilationEditorSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                DatePicker("Start", selection: $startTime)
-                Toggle("Set end time", isOn: $includeEndTime)
-                if includeEndTime {
-                    DatePicker("End", selection: $endTime, in: startTime...)
+            ScrollView {
+                VStack(alignment: .leading, spacing: Spacing.xl) {
+                    NACard(title: "Session", systemImage: "wind", iconTint: Theme.ventilation) {
+                        VStack(alignment: .leading, spacing: Spacing.lg) {
+                            NAFormField(label: "Start") {
+                                DatePicker("Start", selection: $startTime)
+                                    .labelsHidden()
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+
+                            Toggle("Set end time", isOn: $includeEndTime)
+                                .font(Typography.bodyEmphasized)
+                                .foregroundStyle(Theme.textPrimary)
+                                .tint(Theme.ventilation)
+
+                            if includeEndTime {
+                                NAFormField(label: "End") {
+                                    DatePicker("End", selection: $endTime, in: startTime...)
+                                        .labelsHidden()
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                            }
+                        }
+                    }
+
+                    NACard(title: "Before / After", systemImage: "waveform.path.ecg.rectangle", iconTint: Theme.ventilation) {
+                        VStack(alignment: .leading, spacing: Spacing.lg) {
+                            HStack(alignment: .top, spacing: Spacing.lg) {
+                                NAFormField(label: "Initial SpO2", isFocused: focusedField == .initialSaturation) {
+                                    TextField("Initial SpO2", value: $initialSaturation, format: .number)
+                                        .font(Typography.metric)
+                                        .foregroundStyle(Theme.textPrimary)
+                                        .keyboardType(.numberPad)
+                                        .focused($focusedField, equals: .initialSaturation)
+                                }
+                                NAFormField(label: "Initial Pulse", isFocused: focusedField == .initialPulse) {
+                                    TextField("Initial Pulse", value: $initialPulse, format: .number)
+                                        .font(Typography.metric)
+                                        .foregroundStyle(Theme.textPrimary)
+                                        .keyboardType(.numberPad)
+                                        .focused($focusedField, equals: .initialPulse)
+                                }
+                            }
+
+                            HStack(alignment: .top, spacing: Spacing.lg) {
+                                NAFormField(label: "Final SpO2", isFocused: focusedField == .finalSaturation) {
+                                    TextField("Final SpO2", value: $finalSaturation, format: .number)
+                                        .font(Typography.metric)
+                                        .foregroundStyle(Theme.textPrimary)
+                                        .keyboardType(.numberPad)
+                                        .focused($focusedField, equals: .finalSaturation)
+                                }
+                                NAFormField(label: "Final Pulse", isFocused: focusedField == .finalPulse) {
+                                    TextField("Final Pulse", value: $finalPulse, format: .number)
+                                        .font(Typography.metric)
+                                        .foregroundStyle(Theme.textPrimary)
+                                        .keyboardType(.numberPad)
+                                        .focused($focusedField, equals: .finalPulse)
+                                }
+                            }
+                        }
+                    }
+
+                    NACard(title: "Details", systemImage: "square.and.pencil", iconTint: Theme.ventilation) {
+                        VStack(alignment: .leading, spacing: Spacing.lg) {
+                            NAFormField(label: "Reason", isFocused: focusedField == .reason) {
+                                TextField("Reason", text: $reason)
+                                    .focused($focusedField, equals: .reason)
+                                    .textInputAutocapitalization(.sentences)
+                                    .submitLabel(.next)
+                                    .onSubmit { focusedField = .note }
+                            }
+
+                            NAFormField(label: "Note", isFocused: focusedField == .note) {
+                                TextField("Note", text: $note, axis: .vertical)
+                                    .lineLimit(4...)
+                                    .focused($focusedField, equals: .note)
+                                    .textInputAutocapitalization(.sentences)
+                            }
+                        }
+                    }
                 }
-                TextField("Initial SpO2", value: $initialSaturation, format: .number)
-                    .keyboardType(.numberPad)
-                TextField("Initial Pulse", value: $initialPulse, format: .number)
-                    .keyboardType(.numberPad)
-                TextField("Final SpO2", value: $finalSaturation, format: .number)
-                    .keyboardType(.numberPad)
-                TextField("Final Pulse", value: $finalPulse, format: .number)
-                    .keyboardType(.numberPad)
-                TextField("Reason", text: $reason)
-                TextField("Note", text: $note, axis: .vertical)
-                    .lineLimit(4...)
+                .padding()
             }
+            .background(Theme.background)
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Edit Ventilation")
+            .navigationBarTitleDisplayMode(.inline)
+            .keyboardDoneToolbar(focus: $focusedField)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel", action: dismiss.callAsFunction)
@@ -60,24 +140,21 @@ struct VentilationEditorSheet: View {
                 }
             }
         }
+        .presentationDragIndicator(.visible)
+        .presentationBackground(Theme.background)
     }
 
     private func save() {
         session.startTime = startTime
         session.endTime = includeEndTime ? endTime : nil
-        session.initialSaturation = min(max(initialSaturation, 50), 100)
-        session.initialPulse = min(max(initialPulse, 20), 250)
-        session.finalSaturation = min(max(finalSaturation, 50), 100)
-        session.finalPulse = min(max(finalPulse, 20), 250)
-        session.reason = clean(reason)
-        session.note = clean(note)
+        session.initialSaturation = FormSupport.clampSpO2(initialSaturation)
+        session.initialPulse = FormSupport.clampPulse(initialPulse)
+        session.finalSaturation = FormSupport.clampSpO2(finalSaturation)
+        session.finalPulse = FormSupport.clampPulse(finalPulse)
+        session.reason = FormSupport.clean(reason)
+        session.note = FormSupport.clean(note)
         session.updateDuration()
         try? modelContext.save()
         dismiss()
-    }
-
-    private func clean(_ text: String) -> String? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
     }
 }

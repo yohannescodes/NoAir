@@ -4,30 +4,29 @@ struct TimelineEntryRowView: View {
     let item: TimelineItem
 
     var body: some View {
-        HStack(alignment: .top, spacing: 14) {
-            Image(systemName: item.systemImage)
-                .foregroundStyle(item.tint)
-                .frame(width: 28)
+        HStack(alignment: .top, spacing: Spacing.md) {
+            NAIconBadge(systemImage: item.systemImage, tint: item.tint, size: 34)
 
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
                 HStack {
                     Text(item.title)
-                        .font(.headline)
+                        .font(Typography.bodyEmphasized)
+                        .foregroundStyle(Theme.textPrimary)
                     Spacer()
                     Text(item.value)
-                        .font(.subheadline.weight(.semibold))
+                        .font(Typography.bodyEmphasized)
                         .foregroundStyle(item.tint)
                 }
 
                 Text(item.subtitle)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .font(Typography.body)
+                    .foregroundStyle(Theme.textSecondary)
 
                 Text(item.date.formatted(date: .abbreviated, time: .shortened))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(Typography.caption)
+                    .foregroundStyle(Theme.textTertiary)
             }
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, Spacing.sm)
     }
 }

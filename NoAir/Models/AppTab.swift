@@ -1,7 +1,8 @@
 import Foundation
 
 enum AppTab: Hashable {
-    case dashboard
+    case home
+    case trends
     case log
     case timeline
 }

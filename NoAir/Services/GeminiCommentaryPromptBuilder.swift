@@ -1,13 +1,30 @@
 import Foundation
 
+struct WatchVitalsPromptContext {
+    let todayVitals: DailyVitalsSummary?
+    let restingHeartRate: Double?
+    let hrvSDNN: Double?
+    let vo2Max: Double?
+    let respiratoryRate: Double?
+    let sleepSummary: String?
+    let heartEvents: [HeartEvent]
+    let activity: ActivitySnapshot?
+}
+
 struct GeminiCommentaryPromptBuilder {
     func buildPrompt(
         readings: [ReadingRecord],
         ventilations: [VentilationSession],
         treatments: [TreatmentEvent],
-        labs: [LabResultRecord]
+        labs: [LabResultRecord],
+        watch: WatchVitalsPromptContext? = nil
     ) -> String {
-        let insights = HealthInsightsSnapshot(readings: readings, ventilations: ventilations, treatments: treatments)
+        let insights = HealthInsightsSnapshot(
+            readings: readings,
+            ventilations: ventilations,
+            treatments: treatments,
+            watchVitals: watch?.todayVitals
+        )
         let recentReadings = Array(readings.prefix(20))
         let recentVentilations = Array(ventilations.prefix(8))
         let recentTreatments = Array(treatments.prefix(8))
@@ -33,6 +50,8 @@ struct GeminiCommentaryPromptBuilder {
             ? "No computed insights yet."
             : insights.insights.map { "- \($0)" }.joined(separator: "\n")
 
+        let watchBlock = watch.map(watchVitalsBlock) ?? "Apple Health is not connected; no passive watch data available."
+
         return """
         You are writing a non-clinical commentary for NoAir, a personal respiratory logbook.
 
@@ -57,6 +76,9 @@ struct GeminiCommentaryPromptBuilder {
         Computed insights:
         \(insightBlock)
 
+        Apple Watch vitals (passive, from Apple Health; note the watch cannot measure SpO2 below its range, so manual readings capture lows the watch misses):
+        \(watchBlock)
+
         Recent readings:
         \(readingsBlock)
 
@@ -69,6 +91,59 @@ struct GeminiCommentaryPromptBuilder {
         Recent lab results:
         \(labsBlock)
         """
+    }
+
+    private func watchVitalsBlock(_ watch: WatchVitalsPromptContext) -> String {
+        var lines: [String] = []
+        if let vitals = watch.todayVitals {
+            var parts: [String] = []
+            if let min = vitals.spo2Min, let max = vitals.spo2Max, let avg = vitals.spo2Average {
+                parts.append("SpO2 today min=\(min)% max=\(max)% avg=\(avg)% samples=\(vitals.spo2SampleCount)")
+            }
+            if let hrMin = vitals.heartRateMin, let hrMax = vitals.heartRateMax {
+                parts.append("HR today min=\(hrMin) max=\(hrMax)")
+            }
+            if !parts.isEmpty {
+                lines.append("- " + parts.joined(separator: " | "))
+            }
+        }
+        if let resting = watch.restingHeartRate {
+            lines.append("- restingHeartRate=\(Int(resting.rounded()))bpm")
+        }
+        if let hrv = watch.hrvSDNN {
+            lines.append("- hrvSDNN=\(Int(hrv.rounded()))ms")
+        }
+        if let vo2 = watch.vo2Max {
+            lines.append("- vo2Max=\(vo2.formatted(.number.precision(.fractionLength(1))))mL/kg·min")
+        }
+        if let respiratory = watch.respiratoryRate {
+            lines.append("- respiratoryRate=\(respiratory.formatted(.number.precision(.fractionLength(1))))br/min")
+        }
+        if let sleep = watch.sleepSummary {
+            lines.append("- lastNightSleep=\(sleep)")
+        }
+        if !watch.heartEvents.isEmpty {
+            let events = watch.heartEvents.prefix(5)
+                .map { "\($0.kind.rawValue) at \($0.date.formatted(date: .abbreviated, time: .shortened))" }
+                .joined(separator: "; ")
+            lines.append("- heartEvents=\(events)")
+        }
+        if let activity = watch.activity {
+            var parts: [String] = []
+            if let steps = activity.stepsLastHour {
+                parts.append("stepsLastHour=\(steps)")
+            }
+            if let energy = activity.activeEnergyToday {
+                parts.append("activeEnergyToday=\(energy.formatted(.number.precision(.fractionLength(0))))kcal")
+            }
+            if let workout = activity.recentWorkout {
+                parts.append("recentWorkout=\(workout)")
+            }
+            if !parts.isEmpty {
+                lines.append("- activity: " + parts.joined(separator: " | "))
+            }
+        }
+        return lines.isEmpty ? "Connected, but no watch data recorded recently." : lines.joined(separator: "\n")
     }
 
     private func readingLine(_ reading: ReadingRecord) -> String {

@@ -9,7 +9,19 @@ struct TimelineItem: Identifiable {
     let value: String
     let systemImage: String
     let tint: Color
-    let reference: TimelineEventReference
+    let reference: TimelineEventReference?
+
+    init(watchSummary: DailyVitalsSummary) {
+        id = "watch-\(watchSummary.day.timeIntervalSinceReferenceDate)"
+        date = watchSummary.day
+        filter = .readings
+        title = "Apple Watch"
+        subtitle = TimelineItem.watchSubtitle(for: watchSummary)
+        value = watchSummary.spo2SampleCount > 0 ? "\(watchSummary.spo2SampleCount) samples" : "HR only"
+        systemImage = "applewatch"
+        tint = Theme.watch
+        reference = nil
+    }
 
     init(reading: ReadingRecord) {
         id = "reading-\(reading.id.uuidString)"
@@ -19,7 +31,7 @@ struct TimelineItem: Identifiable {
         subtitle = reading.context?.isEmpty == false ? reading.context ?? "" : "Manual log"
         value = "\(reading.spo2)%"
         systemImage = "waveform.path.ecg"
-        tint = .mint
+        tint = Theme.reading
         reference = .reading(reading)
     }
 
@@ -31,7 +43,7 @@ struct TimelineItem: Identifiable {
         subtitle = TimelineItem.ventilationSubtitle(for: ventilation)
         value = ventilation.durationMinutes.map { "\($0)m" } ?? "Open"
         systemImage = "wind"
-        tint = .cyan
+        tint = Theme.ventilation
         reference = .ventilation(ventilation)
     }
 
@@ -43,7 +55,7 @@ struct TimelineItem: Identifiable {
         subtitle = treatment.note
         value = "Treatment"
         systemImage = "cross.vial"
-        tint = .orange
+        tint = Theme.treatment
         reference = .treatment(treatment)
     }
 
@@ -55,8 +67,19 @@ struct TimelineItem: Identifiable {
         subtitle = lab.referenceRange?.isEmpty == false ? "Ref \(lab.referenceRange ?? "")" : "Lab result"
         value = "\(lab.value.formatted()) \(lab.unit)"
         systemImage = "testtube.2"
-        tint = .purple
+        tint = Theme.lab
         reference = .lab(lab)
+    }
+
+    private static func watchSubtitle(for summary: DailyVitalsSummary) -> String {
+        var parts: [String] = []
+        if let min = summary.spo2Min, let max = summary.spo2Max {
+            parts.append(min == max ? "SpO2 \(min)%" : "SpO2 \(min)–\(max)%")
+        }
+        if let hrMin = summary.heartRateMin, let hrMax = summary.heartRateMax {
+            parts.append(hrMin == hrMax ? "HR \(hrMin)" : "HR \(hrMin)–\(hrMax)")
+        }
+        return parts.isEmpty ? "Passive samples" : parts.joined(separator: " • ")
     }
 
     private static func ventilationSubtitle(for session: VentilationSession) -> String {
