@@ -4,6 +4,47 @@ NoAir is a local-first SwiftUI app for logging oxygen saturation (`SpO2`), pulse
 
 It is designed to make personal respiratory tracking fast, structured, and useful for pattern awareness. NoAir is not a medical device and does not diagnose conditions, prescribe treatment, or make emergency decisions.
 
+## Screenshots
+
+<table>
+  <tr>
+    <td align="center" width="25%">
+      <img src="assets/readme/home-reading.jpeg" width="220" alt="Home tab showing the SpO2 ring gauge at 73%, flagged Very Low, with a Log a Reading button" /><br />
+      <sub>Home — latest SpO2 reading with a one-tap logging shortcut</sub>
+    </td>
+    <td align="center" width="25%">
+      <img src="assets/readme/home-watch-today.jpeg" width="220" alt="Home tab showing Apple Watch Today and daily stats cards" /><br />
+      <sub>Home — Apple Watch SpO2/HR ranges and today's lows and averages</sub>
+    </td>
+    <td align="center" width="25%">
+      <img src="assets/readme/home-heart-context.jpeg" width="220" alt="Home tab showing Heart & Sleep panel and environmental Context" /><br />
+      <sub>Home — heart/sleep vitals plus location, weather, and activity context</sub>
+    </td>
+    <td align="center" width="25%">
+      <img src="assets/readme/home-ai-commentary.jpeg" width="220" alt="Home tab showing AI-generated commentary summarizing the day's data" /><br />
+      <sub>Home — optional AI commentary summarizing recent readings</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="25%">
+      <img src="assets/readme/trends-spo2-overnight.jpeg" width="220" alt="Trends tab showing the SpO2 history chart and an overnight SpO2/HR chart" /><br />
+      <sub>Trends — SpO2 history and overnight SpO2/heart rate</sub>
+    </td>
+    <td align="center" width="25%">
+      <img src="assets/readme/trends-cardiac.jpeg" width="220" alt="Trends tab showing the Cardiac panel and Recent Readings list" /><br />
+      <sub>Trends — cardiac panel with resting HR, HRV, and heart-rate notifications</sub>
+    </td>
+    <td align="center" width="25%">
+      <img src="assets/readme/quick-log.jpeg" width="220" alt="Quick Log tab showing the reading entry form with SpO2 and pulse fields" /><br />
+      <sub>Quick Log — fast entry for a manual SpO2/pulse reading</sub>
+    </td>
+    <td align="center" width="25%">
+      <img src="assets/readme/timeline.jpeg" width="220" alt="Timeline tab showing per-day Apple Watch summaries" /><br />
+      <sub>Timeline — reverse-chronological history of Apple Watch day summaries</sub>
+    </td>
+  </tr>
+</table>
+
 ## What The App Does
 
 The current app ships with four primary surfaces:
