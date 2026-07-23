@@ -26,3 +26,6 @@ fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output/
+
+# Local Info.plist — carries the Gemini API key at build time; never commit.
+NoAir/Info.plist
