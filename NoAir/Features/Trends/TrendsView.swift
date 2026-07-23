@@ -93,12 +93,14 @@ struct TrendsView: View {
                 }
 
                 ForEach(visibleManualReadings, id: \.id) { reading in
-                    PointMark(
-                        x: .value("Time", reading.timestamp),
-                        y: .value("SpO2", reading.spo2)
-                    )
-                    .symbolSize(60)
-                    .foregroundStyle(SpO2Zone(spo2: reading.spo2).color)
+                    if let spo2 = reading.spo2 {
+                        PointMark(
+                            x: .value("Time", reading.timestamp),
+                            y: .value("SpO2", spo2)
+                        )
+                        .symbolSize(60)
+                        .foregroundStyle(SpO2Zone(spo2: spo2).color)
+                    }
                 }
             }
             .chartYScale(domain: 70...100)
@@ -175,11 +177,11 @@ struct TrendsView: View {
             } else {
                 VStack(alignment: .leading, spacing: 12) {
                     ForEach(readings.prefix(8), id: \.id) { reading in
-                        let zone = SpO2Zone(spo2: reading.spo2)
+                        let zone = reading.spo2.map(SpO2Zone.init(spo2:))
                         HStack(alignment: .firstTextBaseline, spacing: 12) {
-                            Text("\(reading.spo2)%")
+                            Text(reading.spo2.map { "\($0)%" } ?? "HR only")
                                 .font(Typography.metric)
-                                .foregroundStyle(zone.color)
+                                .foregroundStyle(zone?.color ?? Theme.textSecondary)
 
                             if let pulse = reading.pulse {
                                 Text("\(pulse) bpm")

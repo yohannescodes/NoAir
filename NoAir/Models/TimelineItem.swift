@@ -31,7 +31,13 @@ struct TimelineItem: Identifiable {
         filter = .readings
         title = "Reading"
         subtitle = reading.context?.isEmpty == false ? reading.context ?? "" : "Manual log"
-        value = "\(reading.spo2)%"
+        if let spo2 = reading.spo2 {
+            value = "\(spo2)%"
+        } else if let pulse = reading.pulse {
+            value = "\(pulse) bpm"
+        } else {
+            value = "—"
+        }
         systemImage = "waveform.path.ecg"
         emojiGlyph = "💧"
         tint = Theme.reading

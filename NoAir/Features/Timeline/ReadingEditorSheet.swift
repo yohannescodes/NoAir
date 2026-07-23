@@ -9,6 +9,7 @@ struct ReadingEditorSheet: View {
     let reading: ReadingRecord
 
     @State private var spo2: Int
+    @State private var includeSpo2: Bool
     @State private var pulse: Int
     @State private var includePulse: Bool
     @State private var timestamp: Date
@@ -26,7 +27,8 @@ struct ReadingEditorSheet: View {
 
     init(reading: ReadingRecord) {
         self.reading = reading
-        _spo2 = State(initialValue: reading.spo2)
+        _spo2 = State(initialValue: reading.spo2 ?? 94)
+        _includeSpo2 = State(initialValue: reading.spo2 != nil)
         _pulse = State(initialValue: reading.pulse ?? 80)
         _includePulse = State(initialValue: reading.pulse != nil)
         _timestamp = State(initialValue: reading.timestamp)
@@ -43,12 +45,18 @@ struct ReadingEditorSheet: View {
                         VStack(alignment: .leading, spacing: Spacing.lg) {
                             HStack(alignment: .top, spacing: Spacing.lg) {
                                 NAFormField(label: "SpO2", isFocused: focusedField == .spo2) {
-                                    TextField("SpO2", value: $spo2, format: .number)
-                                        .font(Typography.metricLarge)
-                                        .foregroundStyle(Theme.textPrimary)
-                                        .keyboardType(.numberPad)
-                                        .focused($focusedField, equals: .spo2)
-                                        .frame(minHeight: 44)
+                                    if includeSpo2 {
+                                        TextField("SpO2", value: $spo2, format: .number)
+                                            .font(Typography.metricLarge)
+                                            .foregroundStyle(Theme.textPrimary)
+                                            .keyboardType(.numberPad)
+                                            .focused($focusedField, equals: .spo2)
+                                            .frame(minHeight: 44)
+                                    } else {
+                                        Text("Not set")
+                                            .foregroundStyle(Theme.textTertiary)
+                                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                                    }
                                 }
 
                                 NAFormField(label: "Pulse", isFocused: focusedField == .pulse) {
@@ -66,6 +74,11 @@ struct ReadingEditorSheet: View {
                                     }
                                 }
                             }
+
+                            Toggle("Include SpO2", isOn: $includeSpo2)
+                                .font(Typography.bodyEmphasized)
+                                .foregroundStyle(Theme.textPrimary)
+                                .tint(Theme.accent)
 
                             Toggle("Include pulse", isOn: $includePulse)
                                 .font(Typography.bodyEmphasized)
@@ -125,7 +138,7 @@ struct ReadingEditorSheet: View {
     }
 
     private func save() {
-        reading.spo2 = FormSupport.clampSpO2(spo2)
+        reading.spo2 = includeSpo2 ? FormSupport.clampSpO2(spo2) : nil
         reading.pulse = includePulse ? FormSupport.clampPulse(pulse) : nil
         reading.timestamp = timestamp
         reading.context = FormSupport.clean(context)

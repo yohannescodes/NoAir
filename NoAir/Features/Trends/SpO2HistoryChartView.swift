@@ -58,12 +58,14 @@ struct SpO2HistoryChartView: View {
             }
 
             ForEach(visibleManualReadings, id: \.id) { reading in
-                PointMark(
-                    x: .value("Time", reading.timestamp),
-                    y: .value("SpO2", reading.spo2)
-                )
-                .symbolSize(90)
-                .foregroundStyle(SpO2Zone(spo2: reading.spo2).color)
+                if let spo2 = reading.spo2 {
+                    PointMark(
+                        x: .value("Time", reading.timestamp),
+                        y: .value("SpO2", spo2)
+                    )
+                    .symbolSize(90)
+                    .foregroundStyle(SpO2Zone(spo2: spo2).color)
+                }
             }
 
             RuleMark(y: .value("Threshold", SpO2Zone.belowThresholdCutoff))

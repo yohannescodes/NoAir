@@ -149,7 +149,7 @@ struct GeminiCommentaryPromptBuilder {
     private func readingLine(_ reading: ReadingRecord) -> String {
         let fields = [
             "time=\(reading.timestamp.formatted(date: .abbreviated, time: .shortened))",
-            "spo2=\(reading.spo2)%",
+            reading.spo2.map { "spo2=\($0)%" },
             reading.pulse.map { "pulse=\($0)bpm" },
             reading.context.map { "context=\($0)" },
             !reading.symptoms.isEmpty ? "symptoms=\(reading.symptoms.joined(separator: ", "))" : nil,

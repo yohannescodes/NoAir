@@ -215,15 +215,24 @@ final class HealthKitService {
         let syncVersion = max(1, Int(reading.updatedAt.timeIntervalSince1970))
         var samples: [HKQuantitySample] = []
 
-        samples.append(
-            HKQuantitySample(
-                type: HKQuantityType(.oxygenSaturation),
-                quantity: HKQuantity(unit: .percent(), doubleValue: Double(reading.spo2) / 100),
-                start: reading.timestamp,
-                end: reading.timestamp,
-                metadata: exportMetadata(identifier: "\(Self.syncIdentifierPrefix)spo2-\(reading.id.uuidString)", version: syncVersion)
+        if let spo2 = reading.spo2 {
+            samples.append(
+                HKQuantitySample(
+                    type: HKQuantityType(.oxygenSaturation),
+                    quantity: HKQuantity(unit: .percent(), doubleValue: Double(spo2) / 100),
+                    start: reading.timestamp,
+                    end: reading.timestamp,
+                    metadata: exportMetadata(identifier: "\(Self.syncIdentifierPrefix)spo2-\(reading.id.uuidString)", version: syncVersion)
+                )
             )
-        )
+        } else if reading.healthKitExportedAt != nil {
+            // Editor cleared SpO2 on a previously-exported reading — remove the
+            // orphaned sample from Health so it doesn't linger.
+            try? await deleteExportedSamples(
+                withIdentifiers: ["\(Self.syncIdentifierPrefix)spo2-\(reading.id.uuidString)"],
+                types: [HKQuantityType(.oxygenSaturation)]
+            )
+        }
 
         if let pulse = reading.pulse {
             samples.append(

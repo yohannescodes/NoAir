@@ -352,7 +352,7 @@ struct HomeView: View {
     private var latestReading: ReadingRecord? { readings.first }
 
     private var latestSpo2Display: Int {
-        if let latestReading { return latestReading.spo2 }
+        if let latestReading, let spo2 = latestReading.spo2 { return spo2 }
         if let watch = healthDataProvider.latestWatchSpO2 { return Int(watch.value.rounded()) }
         return preferences.baselineSpo2
     }
