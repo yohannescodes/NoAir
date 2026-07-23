@@ -10,9 +10,22 @@
 		7CDD4D372F6ED32600565086 /* NoAir.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NoAir.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		7C23A0333012884300B67DFB /* Exceptions for "NoAir" folder in "NoAir" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 7CDD4D362F6ED32600565086 /* NoAir */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		7CDD4D392F6ED32600565086 /* NoAir */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				7C23A0333012884300B67DFB /* Exceptions for "NoAir" folder in "NoAir" target */,
+			);
 			path = NoAir;
 			sourceTree = "<group>";
 		};
@@ -257,6 +270,7 @@
 				DEVELOPMENT_TEAM = N3ZFQD527H;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = NoAir/Info.plist;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "NoAir reads oxygen, heart, sleep, and activity data from Health to give context to your manual readings.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "NoAir saves your manually logged SpO2 and pulse readings to Health.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "NoAir uses your location to attach altitude and local weather to your readings.";
@@ -293,6 +307,7 @@
 				DEVELOPMENT_TEAM = N3ZFQD527H;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = NoAir/Info.plist;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "NoAir reads oxygen, heart, sleep, and activity data from Health to give context to your manual readings.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "NoAir saves your manually logged SpO2 and pulse readings to Health.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "NoAir uses your location to attach altitude and local weather to your readings.";
