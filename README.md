@@ -144,10 +144,14 @@ NoAir/
 
 ## Running The App
 
-1. Open [NoAir.xcodeproj](/Users/yohanneshaile/Documents/Projects/vibed/NoAir/NoAir.xcodeproj) in Xcode.
-2. Select the `NoAir` scheme.
-3. Choose an iPhone or iPad simulator, or a connected device.
-4. Build and run.
+1. Clone the repo and open `NoAir.xcodeproj` in Xcode.
+2. Copy `NoAir/Info.plist.example` to `NoAir/Info.plist` and paste your
+   Google AI Studio Gemini API key ([get one here](https://aistudio.google.com/apikey))
+   into the `GeminiAPIKey` entry. The plist is gitignored so keys never
+   land in commits.
+3. Select the `NoAir` scheme.
+4. Choose an iPhone or iPad simulator, or a connected device.
+5. Build and run.
 
 You can also build from Terminal:
 
