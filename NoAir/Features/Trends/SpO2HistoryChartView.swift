@@ -6,6 +6,7 @@ import SwiftUI
 struct SpO2HistoryChartView: View {
     let manualReadings: [ReadingRecord]
     let watchPoints: [QuantityPoint]
+    var personalZone: ClosedRange<Int>?
 
     private var chartWindow: DateInterval {
         DateInterval(start: Date(timeIntervalSinceNow: -7 * 86_400), end: .now)
@@ -16,7 +17,13 @@ struct SpO2HistoryChartView: View {
     }
 
     var body: some View {
-        NACard(title: "SpO2 History", systemImage: "chart.xyaxis.line") {
+        NACard(title: "SpO2 · 7 days", systemImage: "chart.xyaxis.line") {
+            if personalZone != nil {
+                Text("Shaded band is YOUR normal range, not a medical threshold.")
+                    .font(Typography.caption)
+                    .foregroundStyle(Theme.textTertiary)
+            }
+
             if visibleManualReadings.count > 1 || watchPoints.count > 1 {
                 chart
             } else {
@@ -31,6 +38,14 @@ struct SpO2HistoryChartView: View {
 
     private var chart: some View {
         Chart {
+            if let personalZone {
+                RectangleMark(
+                    yStart: .value("Personal low", personalZone.lowerBound),
+                    yEnd: .value("Personal high", personalZone.upperBound)
+                )
+                .foregroundStyle(Theme.accent.opacity(0.12))
+            }
+
             ForEach(watchPoints) { point in
                 LineMark(
                     x: .value("Time", point.date),
