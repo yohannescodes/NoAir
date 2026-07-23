@@ -53,7 +53,7 @@ struct GeminiCommentaryPromptBuilder {
         let watchBlock = watch.map(watchVitalsBlock) ?? "Apple Health is not connected; no passive watch data available."
 
         return """
-        You are writing a non-clinical commentary for NoAir, a personal respiratory logbook.
+        You are writing a non-clinical commentary for Oxylittle, a personal respiratory logbook.
 
         Your job:
         - describe patterns, changes, correlations, missing context, and noteworthy clusters

@@ -9,14 +9,12 @@ struct AICommentaryCardView: View {
     let labs: [LabResultRecord]
     let autoGenerateOnAppear: Bool
 
-    @AppStorage("gemini.apiKey") private var apiKey = ""
     @AppStorage("gemini.commentary.text") private var cachedCommentary = ""
     @AppStorage("gemini.commentary.generatedAt") private var generatedAtTimestamp = 0.0
     @AppStorage("gemini.commentary.logsSignature") private var cachedLogsSignature = ""
 
     @State private var isGenerating = false
     @State private var statusMessage = ""
-    @State private var isShowingAPIKeySheet = false
 
     private let service = GeminiCommentaryService()
     private let promptBuilder = GeminiCommentaryPromptBuilder()
@@ -68,22 +66,12 @@ struct AICommentaryCardView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                HStack {
-                    Button(apiKey.isEmpty ? "Add Gemini Key" : "Edit Key") {
-                        isShowingAPIKeySheet = true
-                    }
-                    .buttonStyle(.bordered)
-
-                    Button(isGenerating ? "Generating…" : "Generate Commentary") {
-                        generateCommentary()
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(isGenerating || !hasAnyData || apiKey.isEmpty)
+                Button(isGenerating ? "Generating…" : "Generate Commentary") {
+                    generateCommentary()
                 }
+                .buttonStyle(.borderedProminent)
+                .disabled(isGenerating || !hasAnyData || !service.isConfigured)
             }
-        }
-        .sheet(isPresented: $isShowingAPIKeySheet) {
-            GeminiAPIKeySheet(apiKey: $apiKey)
         }
         .task(id: autoGenerationTaskID) {
             guard autoGenerateOnAppear else { return }
@@ -149,12 +137,12 @@ struct AICommentaryCardView: View {
     }
 
     private var autoGenerationTaskID: String {
-        "\(autoGenerateOnAppear)-\(currentLogsSignature)-\(apiKey)"
+        "\(autoGenerateOnAppear)-\(currentLogsSignature)"
     }
 
     @MainActor
     private func generateCommentaryIfNeeded() async {
-        guard !apiKey.isEmpty, hasAnyData else { return }
+        guard service.isConfigured, hasAnyData else { return }
 
         // Don't generate off a half-loaded snapshot: if Health is connected but
         // the first refresh hasn't landed yet, wait for it. The signature task
@@ -207,7 +195,7 @@ struct AICommentaryCardView: View {
         )
 
         do {
-            let commentary = try await service.generateCommentary(apiKey: apiKey, prompt: prompt)
+            let commentary = try await service.generateCommentary(prompt: prompt)
             cachedCommentary = commentary
             cachedLogsSignature = currentLogsSignature
             generatedAtTimestamp = Date().timeIntervalSince1970
