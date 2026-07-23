@@ -1,3 +1,4 @@
+import SwiftData
 import SwiftUI
 
 struct AICommentaryCardView: View {
@@ -8,6 +9,8 @@ struct AICommentaryCardView: View {
     let treatments: [TreatmentEvent]
     let labs: [LabResultRecord]
     let autoGenerateOnAppear: Bool
+
+    @Query(sort: \JournalEntry.timestamp, order: .reverse) private var journals: [JournalEntry]
 
     @AppStorage("gemini.commentary.text") private var cachedCommentary = ""
     @AppStorage("gemini.commentary.generatedAt") private var generatedAtTimestamp = 0.0
@@ -108,12 +111,16 @@ struct AICommentaryCardView: View {
         let labSignature = labs
             .map { "\($0.id.uuidString):\($0.updatedAt.timeIntervalSince1970)" }
             .joined(separator: "|")
+        let journalSignature = journals
+            .map { "\($0.id.uuidString):\($0.updatedAt.timeIntervalSince1970)" }
+            .joined(separator: "|")
 
         return [
             "r[\(readingSignature)]",
             "v[\(ventilationSignature)]",
             "t[\(treatmentSignature)]",
             "l[\(labSignature)]",
+            "j[\(journalSignature)]",
             "w[\(watchSignature)]"
         ].joined(separator: "#")
     }
@@ -191,6 +198,7 @@ struct AICommentaryCardView: View {
             ventilations: ventilations,
             treatments: treatments,
             labs: labs,
+            journals: journals,
             watch: watchContext
         )
 

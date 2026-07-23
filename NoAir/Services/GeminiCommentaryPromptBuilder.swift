@@ -17,6 +17,7 @@ struct GeminiCommentaryPromptBuilder {
         ventilations: [VentilationSession],
         treatments: [TreatmentEvent],
         labs: [LabResultRecord],
+        journals: [JournalEntry] = [],
         watch: WatchVitalsPromptContext? = nil
     ) -> String {
         let insights = HealthInsightsSnapshot(
@@ -29,6 +30,7 @@ struct GeminiCommentaryPromptBuilder {
         let recentVentilations = Array(ventilations.prefix(8))
         let recentTreatments = Array(treatments.prefix(8))
         let recentLabs = Array(labs.prefix(10))
+        let recentJournals = Array(journals.prefix(15))
 
         let readingsBlock = recentReadings.isEmpty
             ? "No readings logged yet."
@@ -45,6 +47,10 @@ struct GeminiCommentaryPromptBuilder {
         let labsBlock = recentLabs.isEmpty
             ? "No lab results logged."
             : recentLabs.map(labLine).joined(separator: "\n")
+
+        let journalBlock = recentJournals.isEmpty
+            ? "No free-form notes logged."
+            : recentJournals.map(journalLine).joined(separator: "\n")
 
         let insightBlock = insights.insights.isEmpty
             ? "No computed insights yet."
@@ -90,7 +96,15 @@ struct GeminiCommentaryPromptBuilder {
 
         Recent lab results:
         \(labsBlock)
+
+        Recent free-form notes (natural-language context the user wrote in their own words — treat as ground truth for what happened, how it felt, or what they were told):
+        \(journalBlock)
         """
+    }
+
+    private func journalLine(_ entry: JournalEntry) -> String {
+        let stamp = entry.timestamp.formatted(date: .abbreviated, time: .shortened)
+        return "- [\(stamp)] \(entry.text)"
     }
 
     private func watchVitalsBlock(_ watch: WatchVitalsPromptContext) -> String {

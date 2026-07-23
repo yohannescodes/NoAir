@@ -6,6 +6,7 @@ enum TimelineFilter: String, CaseIterable, Identifiable {
     case ventilation = "Ventilation"
     case treatments = "Treatments"
     case labs = "Labs"
+    case notes = "Notes"
 
     var id: String { rawValue }
 }

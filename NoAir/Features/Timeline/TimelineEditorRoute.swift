@@ -5,6 +5,7 @@ enum TimelineEditorRoute: Identifiable {
     case ventilation(VentilationSession)
     case treatment(TreatmentEvent)
     case lab(LabResultRecord)
+    case journal(JournalEntry)
 
     var id: String {
         switch self {
@@ -16,6 +17,8 @@ enum TimelineEditorRoute: Identifiable {
             "treatment-\(treatment.id.uuidString)"
         case let .lab(lab):
             "lab-\(lab.id.uuidString)"
+        case let .journal(entry):
+            "journal-\(entry.id.uuidString)"
         }
     }
 }

@@ -70,6 +70,19 @@ struct TimelineItem: Identifiable {
         reference = .treatment(treatment)
     }
 
+    init(journal: JournalEntry) {
+        id = "journal-\(journal.id.uuidString)"
+        date = journal.timestamp
+        filter = .notes
+        title = "Note"
+        subtitle = journal.text
+        value = ""
+        systemImage = "note.text"
+        emojiGlyph = "📝"
+        tint = Theme.textSecondary
+        reference = .journal(journal)
+    }
+
     init(lab: LabResultRecord) {
         id = "lab-\(lab.id.uuidString)"
         date = lab.timestamp

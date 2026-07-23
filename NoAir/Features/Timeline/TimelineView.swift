@@ -18,6 +18,7 @@ struct TimelineView: View {
     @Query(sort: \VentilationSession.startTime, order: .reverse) private var ventilations: [VentilationSession]
     @Query(sort: \TreatmentEvent.timestamp, order: .reverse) private var treatments: [TreatmentEvent]
     @Query(sort: \LabResultRecord.timestamp, order: .reverse) private var labs: [LabResultRecord]
+    @Query(sort: \JournalEntry.timestamp, order: .reverse) private var journalEntries: [JournalEntry]
 
     var body: some View {
         ScrollView {
@@ -84,6 +85,8 @@ struct TimelineView: View {
                 TreatmentEditorSheet(treatment: treatment)
             case let .lab(lab):
                 LabResultEditorSheet(labResult: lab)
+            case let .journal(entry):
+                JournalEntryEditorSheet(entry: entry)
             }
         }
     }
@@ -162,6 +165,7 @@ struct TimelineView: View {
             ventilations.map(TimelineItem.init(ventilation:)) +
             treatments.map(TimelineItem.init(treatment:)) +
             labs.map(TimelineItem.init(lab:)) +
+            journalEntries.map(TimelineItem.init(journal:)) +
             watchSummaries.map(TimelineItem.init(watchSummary:))
         return items.sorted { $0.date > $1.date }
     }
@@ -192,6 +196,8 @@ struct TimelineView: View {
             activeEditor = .treatment(treatment)
         case let .lab(lab):
             activeEditor = .lab(lab)
+        case let .journal(entry):
+            activeEditor = .journal(entry)
         case nil:
             break
         }
@@ -214,6 +220,8 @@ struct TimelineView: View {
             modelContext.delete(treatment)
         case let .lab(lab):
             modelContext.delete(lab)
+        case let .journal(entry):
+            modelContext.delete(entry)
         case nil:
             return
         }
