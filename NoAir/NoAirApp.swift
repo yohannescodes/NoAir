@@ -26,6 +26,7 @@ struct NoAirApp: App {
             DailyCheckIn.self,
             HydrationLog.self,
             IMTSession.self,
+            JournalEntry.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
