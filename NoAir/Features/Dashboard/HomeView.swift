@@ -19,7 +19,6 @@ struct HomeView: View {
     @Query(sort: \LabResultRecord.timestamp, order: .reverse) private var labs: [LabResultRecord]
     @Query private var checkIns: [DailyCheckIn]
     @Query private var hydrationLogs: [HydrationLog]
-    @Query(sort: \IMTSession.startedAt, order: .reverse) private var imtSessions: [IMTSession]
 
     private let streakService = LoggingStreakService()
 
@@ -389,7 +388,7 @@ struct HomeView: View {
 
     private var energyNote: String? {
         guard let energy = todayEnergy else { return nil }
-        if energy >= 7 { return "Good energy — great day for IMT breaths." }
+        if energy >= 7 { return "Good energy — a solid day to log more context." }
         if energy <= 3 { return "Low energy day. Be gentle with yourself, pacing matters." }
         return "Steady day. Keep an eye on how you feel."
     }
@@ -400,13 +399,6 @@ struct HomeView: View {
     }
 
     private var hydrationCount: Int { hydrationLogToday?.count ?? 0 }
-
-    private var imtTodayComplete: Bool {
-        let start = Calendar.current.startOfDay(for: .now)
-        return imtSessions.contains {
-            Calendar.current.isDate($0.startedAt, inSameDayAs: start) && $0.isComplete
-        }
-    }
 
     private var readingLoggedToday: Bool {
         readings.contains { Calendar.current.isDateInToday($0.timestamp) }
@@ -430,16 +422,6 @@ struct HomeView: View {
                 meta: "\(hydrationCount)/\(HydrationLog.questTarget)",
                 isDone: hydrationCount >= HydrationLog.questTarget,
                 action: { addHydration() }
-            ),
-            Quest(
-                id: "imt",
-                title: "30 IMT breaths",
-                meta: "3 sets",
-                isDone: imtTodayComplete,
-                action: {
-                    selectedLogKind = .ventilation
-                    selectedTab = .log
-                }
             ),
         ]
     }
