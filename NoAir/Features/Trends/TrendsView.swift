@@ -15,6 +15,7 @@ struct TrendsView: View {
     @State private var watchHistoryPoints: [QuantityPoint] = []
     @State private var overnightHeartRate: [QuantityPoint] = []
     @State private var showLegacy = false
+    @State private var showsRecap = false
 
     var body: some View {
         ScrollView {
@@ -23,14 +24,18 @@ struct TrendsView: View {
                     .font(.system(size: 22, weight: .heavy, design: .rounded))
                     .foregroundStyle(Theme.textPrimary)
 
-                weeklyChartCard
+                if readings.isEmpty {
+                    firstRunEmpty
+                } else {
+                    weeklyChartCard
 
-                HStack(spacing: 10) {
-                    metricTile(title: "Resting HR", value: restingHR)
-                    metricTile(title: "HRV", value: hrv)
+                    HStack(spacing: 10) {
+                        metricTile(title: "Resting HR", value: restingHR)
+                        metricTile(title: "HRV", value: hrv)
+                    }
+
+                    weekInReviewButton
                 }
-
-                weekInReviewButton
 
                 DisclosureGroup(isExpanded: $showLegacy) {
                     VStack(spacing: 14) {
@@ -63,6 +68,34 @@ struct TrendsView: View {
         .task(id: healthDataProvider.lastRefreshed) {
             await loadChartData()
         }
+    }
+
+    /// First-run empty state (§H1). Sits in the primary content slot
+    /// instead of the chart when zero readings exist.
+    private var firstRunEmpty: some View {
+        VStack(spacing: 14) {
+            OxyMascotView(mood: .calm, size: 72)
+                .padding(.top, 20)
+            Text("Nothing to chart yet")
+                .font(.system(size: 18, weight: .heavy, design: .rounded))
+                .foregroundStyle(Theme.textPrimary)
+            Text("Log a reading and I'll start plotting the shape of your days.")
+                .font(.system(size: 13, design: .rounded))
+                .foregroundStyle(Theme.textSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 22)
+                .lineSpacing(2)
+        }
+        .padding(.vertical, 24)
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(Theme.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .strokeBorder(Theme.stroke, lineWidth: 1)
+                )
+        )
     }
 
     private var weeklyChartCard: some View {
@@ -143,29 +176,38 @@ struct TrendsView: View {
     }
 
     private var weekInReviewButton: some View {
-        HStack(spacing: 10) {
-            Text("✨")
-                .font(.system(size: 16))
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Your week in review")
-                    .font(.system(size: 12, weight: .heavy, design: .rounded))
-                    .foregroundStyle(Theme.textPrimary)
-                Text("Coming soon — a wrapped-style recap")
-                    .font(.system(size: 10.5, design: .rounded))
-                    .foregroundStyle(Theme.textSecondary)
+        Button { showsRecap = true } label: {
+            HStack(spacing: 10) {
+                Text("✨")
+                    .font(.system(size: 16))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Your week in review")
+                        .font(.system(size: 12, weight: .heavy, design: .rounded))
+                        .foregroundStyle(Theme.textPrimary)
+                    Text("A 6-card recap of your last 7 days")
+                        .font(.system(size: 10.5, design: .rounded))
+                        .foregroundStyle(Theme.textSecondary)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Theme.textTertiary)
             }
-            Spacer(minLength: 0)
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Theme.accent.opacity(0.10))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .strokeBorder(Theme.stroke, lineWidth: 1)
+                    )
+            )
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Theme.accent.opacity(0.10))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(Theme.stroke, lineWidth: 1)
-                )
-        )
+        .buttonStyle(NAPressableButtonStyle())
+        .fullScreenCover(isPresented: $showsRecap) {
+            WeeklyRecapView(preferences: preferences)
+        }
     }
 
     private var recentReadingsCard: some View {

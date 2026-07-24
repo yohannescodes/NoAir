@@ -45,6 +45,10 @@ struct HomeView: View {
 
                 snapshotCard
 
+                if let banner = healthAuthBanner {
+                    healthAuthBannerView(banner)
+                }
+
                 energyCard
 
                 questsCard
@@ -361,6 +365,95 @@ struct HomeView: View {
                         .strokeBorder(Theme.stroke, lineWidth: 1)
                 )
         )
+    }
+
+    // MARK: - HealthKit auth states (§G1-§G3)
+
+    private enum HealthAuthState { case denied, grantedEmpty }
+
+    /// Which auth banner to show above the quests. Compact — we only badge
+    /// the two states worth calling out: denied (user actively said no) and
+    /// granted-but-empty (waiting for first watch sample). "Partially
+    /// granted" is deferred until the individual tiles handle their own
+    /// "—" states in Phase 6.
+    private var healthAuthBanner: HealthAuthState? {
+        if !healthDataProvider.isConnected {
+            // If they never asked, don't nag on Home — it lives inside
+            // "More detail" already. Only show when they've been asked
+            // and denied.
+            return healthKitAsked ? .denied : nil
+        }
+        if readings.isEmpty && healthDataProvider.latestWatchSpO2 == nil {
+            return .grantedEmpty
+        }
+        return nil
+    }
+
+    /// Cached auth-requested marker so we don't blast a "denied" banner at
+    /// users who simply haven't hit "Connect Apple Health" yet.
+    private var healthKitAsked: Bool {
+        UserDefaults.standard.bool(forKey: "noair.healthkit.authRequested")
+    }
+
+    @ViewBuilder
+    private func healthAuthBannerView(_ state: HealthAuthState) -> some View {
+        switch state {
+        case .denied:
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "heart.slash.fill")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(Theme.textSecondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Apple Health is off")
+                        .font(.system(size: 12.5, weight: .heavy, design: .rounded))
+                        .foregroundStyle(Theme.textPrimary)
+                    Text("You can still log by hand. Enable Health in iOS Settings to sync watch readings.")
+                        .font(.system(size: 11, design: .rounded))
+                        .foregroundStyle(Theme.textSecondary)
+                }
+                Spacer(minLength: 0)
+                Button("Open Settings") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                }
+                .font(.system(size: 11, weight: .heavy, design: .rounded))
+                .foregroundStyle(Theme.accent)
+            }
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Theme.surfaceElevated)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .strokeBorder(Theme.stroke, lineWidth: 1)
+                    )
+            )
+        case .grantedEmpty:
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "applewatch")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(Theme.accent)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Waiting for your first reading")
+                        .font(.system(size: 12.5, weight: .heavy, design: .rounded))
+                        .foregroundStyle(Theme.textPrimary)
+                    Text("Health is connected. Log one by hand or wear your watch overnight to seed the timeline.")
+                        .font(.system(size: 11, design: .rounded))
+                        .foregroundStyle(Theme.textSecondary)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Theme.accent.opacity(0.08))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .strokeBorder(Theme.accent.opacity(0.3), lineWidth: 1)
+                    )
+            )
+        }
     }
 
     private func triggerBanner(_ banner: EnvironmentTrigger) -> some View {

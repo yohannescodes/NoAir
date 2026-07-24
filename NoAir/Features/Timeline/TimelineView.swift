@@ -30,15 +30,42 @@ struct TimelineView: View {
                 filterChipRow
 
                 if filteredItems.isEmpty {
-                    Text("No events match the current filter yet.")
-                        .font(Typography.body)
-                        .foregroundStyle(Theme.textSecondary)
-                        .padding(16)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if mergedItems.isEmpty {
+                        // §H2: first-run — never any data yet
+                        VStack(spacing: 14) {
+                            OxyMascotView(mood: .calm, size: 72)
+                                .padding(.top, 20)
+                            Text("Your story starts here")
+                                .font(.system(size: 18, weight: .heavy, design: .rounded))
+                                .foregroundStyle(Theme.textPrimary)
+                            Text("Everything you log — readings, treatments, journal notes — lands here in order.")
+                                .font(.system(size: 13, design: .rounded))
+                                .foregroundStyle(Theme.textSecondary)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 22)
+                        }
+                        .padding(.vertical, 24)
+                        .frame(maxWidth: .infinity)
                         .background(
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            RoundedRectangle(cornerRadius: 22, style: .continuous)
                                 .fill(Theme.surface)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                        .strokeBorder(Theme.stroke, lineWidth: 1)
+                                )
                         )
+                    } else {
+                        // Filter matches nothing but there is data elsewhere.
+                        Text("No events match the current filter yet.")
+                            .font(Typography.body)
+                            .foregroundStyle(Theme.textSecondary)
+                            .padding(16)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .fill(Theme.surface)
+                            )
+                    }
                 } else {
                     ForEach(sectionDates, id: \.self) { date in
                         VStack(alignment: .leading, spacing: 8) {
