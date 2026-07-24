@@ -916,6 +916,14 @@ private struct TreatmentCaptureCard: View {
         )
         modelContext.insert(event)
         try? modelContext.save()
+
+        // Streak-freeze on the worst days: hospitalizations and ER visits
+        // shouldn't cost the user their streak, and shouldn't charge 200 🪙
+        // either. Auto-protect the day without spending anything.
+        if selectedType == .hospitalization || selectedType == .erVisit {
+            OxypointsService(modelContext: modelContext).autoProtect(day: timestamp)
+        }
+
         onSaved(displayName)
     }
 }

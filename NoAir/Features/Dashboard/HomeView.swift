@@ -14,6 +14,7 @@ struct HomeView: View {
     let preferences: UserPreferences
     var onOpenSettings: () -> Void = {}
     var onOpenChat: () -> Void = {}
+    var onOpenCloset: () -> Void = {}
 
     @Query(sort: \ReadingRecord.timestamp, order: .reverse) private var readings: [ReadingRecord]
     @Query(sort: \VentilationSession.startTime, order: .reverse) private var ventilations: [VentilationSession]
@@ -129,21 +130,24 @@ struct HomeView: View {
         }
     }
 
-    /// Oxypoints balance pill per Screens v2 §A1.
+    /// Oxypoints balance pill per Screens v2 §A1 — tap opens the closet.
     private var oxypointsPill: some View {
-        HStack(spacing: 5) {
-            Text("🪙").font(.system(size: 13))
-            Text("\(oxypointsBalance)")
-                .font(.system(size: 13, weight: .heavy, design: .rounded))
-                .foregroundStyle(Theme.accent)
-                .contentTransition(.numericText())
+        Button(action: onOpenCloset) {
+            HStack(spacing: 5) {
+                Text("🪙").font(.system(size: 13))
+                Text("\(oxypointsBalance)")
+                    .font(.system(size: 13, weight: .heavy, design: .rounded))
+                    .foregroundStyle(Theme.accent)
+                    .contentTransition(.numericText())
+            }
+            .padding(.horizontal, 11)
+            .padding(.vertical, 6)
+            .background(
+                Capsule().fill(Theme.accent.opacity(0.15))
+            )
         }
-        .padding(.horizontal, 11)
-        .padding(.vertical, 6)
-        .background(
-            Capsule().fill(Theme.accent.opacity(0.15))
-        )
-        .accessibilityLabel("\(oxypointsBalance) Oxypoints")
+        .buttonStyle(NAPressableButtonStyle())
+        .accessibilityLabel("\(oxypointsBalance) Oxypoints, open closet")
     }
 
     /// Emoji streak pill per screens (5, 6, 7) — flame + count in orange-tinted capsule.
@@ -278,11 +282,24 @@ struct HomeView: View {
         )
     }
 
+    /// Streak-keeper card per Screens v2 §A1 — replaces the old "Today's
+    /// quests" card. Shows the day-condition rows for keeping the flame
+    /// alive plus a footer explaining the +50 🪙 all-four bonus. Tap on any
+    /// unfinished row routes into the corresponding Log flow.
     private var questsCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Today's quests")
-                .font(.system(size: 13, weight: .heavy, design: .rounded))
-                .foregroundStyle(Theme.textPrimary)
+            HStack {
+                Text("Keep your streak today")
+                    .font(.system(size: 13, weight: .heavy, design: .rounded))
+                    .foregroundStyle(Theme.textPrimary)
+                Spacer()
+                HStack(spacing: 5) {
+                    Text("🔥").font(.system(size: 12))
+                    Text("Day \(streak.current)")
+                        .font(.system(size: 11, weight: .heavy, design: .rounded))
+                        .foregroundStyle(Theme.streak)
+                }
+            }
 
             VStack(spacing: 8) {
                 ForEach(quests) { quest in
@@ -294,6 +311,10 @@ struct HomeView: View {
                                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                                     .fill(quest.isDone ? Theme.accent : Theme.surfaceElevated)
                                     .frame(width: 20, height: 20)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                            .strokeBorder(quest.isDone ? .clear : Theme.stroke, lineWidth: 1)
+                                    )
                                 if quest.isDone {
                                     Image(systemName: "checkmark")
                                         .font(.system(size: 11, weight: .black))
@@ -304,23 +325,30 @@ struct HomeView: View {
                             Text(quest.title)
                                 .font(.system(size: 12.5, weight: .semibold, design: .rounded))
                                 .foregroundStyle(quest.isDone ? Theme.textSecondary : Theme.textPrimary)
-                                .strikethrough(quest.isDone, color: Theme.textSecondary)
 
                             Spacer(minLength: 0)
 
-                            Text(quest.meta)
-                                .font(.system(size: 10, weight: .semibold, design: .rounded))
-                                .foregroundStyle(Theme.textTertiary)
+                            Text(quest.isDone ? "Done" : quest.meta)
+                                .font(.system(size: 10.5, weight: .heavy, design: .rounded))
+                                .foregroundStyle(quest.isDone ? Theme.accent : Theme.warning)
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 10)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(quest.isDone ? Theme.accent.opacity(0.14) : Theme.surfaceElevated)
-                        )
                     }
                     .buttonStyle(NAPressableButtonStyle())
                 }
+            }
+            .padding(.top, 2)
+
+            Divider().overlay(Theme.stroke)
+                .padding(.top, 3)
+
+            HStack(spacing: 6) {
+                Text("All four keeps your streak alive & earns")
+                    .font(.system(size: 11, design: .rounded))
+                    .foregroundStyle(Theme.textTertiary)
+                Text("+50 🪙")
+                    .font(.system(size: 11, weight: .heavy, design: .rounded))
+                    .foregroundStyle(Theme.accent)
+                Spacer(minLength: 0)
             }
         }
         .padding(16)
@@ -459,30 +487,69 @@ struct HomeView: View {
 
     private var hydrationMlToday: Int { hydrationLogToday?.ml ?? 0 }
 
-    private var readingLoggedToday: Bool {
-        readings.contains { Calendar.current.isDateInToday($0.timestamp) }
+    private var spo2LoggedToday: Bool {
+        readings.contains { Calendar.current.isDateInToday($0.timestamp) && $0.spo2 != nil }
     }
 
+    private var hrLoggedToday: Bool {
+        readings.contains { Calendar.current.isDateInToday($0.timestamp) && $0.pulse != nil }
+    }
+
+    private var medicationLoggedToday: Bool {
+        treatments.contains { Calendar.current.isDateInToday($0.timestamp) && $0.type == .medication }
+    }
+
+    /// Whether the user is currently on medication at all. Drives whether
+    /// the med row appears in the streak-keeper: no meds = row hidden.
+    private var takesMedication: Bool {
+        treatments.contains { $0.type == .medication }
+    }
+
+    /// Streak-keeper conditions per Spec v2 §20. Order matches Screens §A1:
+    /// Blood oxygen · Heart rate · Water · Medication (if applicable).
     private var quests: [Quest] {
-        [
+        var list: [Quest] = [
             Quest(
-                id: "reading",
-                title: "Log a reading",
-                meta: "daily",
-                isDone: readingLoggedToday,
+                id: "spo2",
+                title: "Blood oxygen",
+                meta: "Log a reading",
+                isDone: spo2LoggedToday,
                 action: {
                     selectedLogKind = .reading
                     selectedTab = .log
                 }
             ),
             Quest(
-                id: "hydrate",
-                title: "Hit your water target",
-                meta: "\(hydrationMlToday)/\(preferences.targetMl) ml",
+                id: "hr",
+                title: "Heart rate",
+                meta: "Log a pulse",
+                isDone: hrLoggedToday,
+                action: {
+                    selectedLogKind = .reading
+                    selectedTab = .log
+                }
+            ),
+            Quest(
+                id: "water",
+                title: "Water · fluid-aware target",
+                meta: "\(hydrationMlToday) / \(preferences.targetMl) ml",
                 isDone: hydrationMlToday >= preferences.targetMl,
                 action: { addHydration() }
             ),
         ]
+        if takesMedication {
+            list.append(Quest(
+                id: "med",
+                title: "Medication",
+                meta: "Log a dose",
+                isDone: medicationLoggedToday,
+                action: {
+                    selectedLogKind = .treatment
+                    selectedTab = .log
+                }
+            ))
+        }
+        return list
     }
 
     private var streak: LoggingStreakService.Streak {

@@ -11,6 +11,8 @@ struct ContentView: View {
 
     @Query private var allPreferences: [UserPreferences]
     @Query(sort: \ReadingRecord.timestamp, order: .reverse) private var allReadings: [ReadingRecord]
+    @Query(sort: \TreatmentEvent.timestamp, order: .reverse) private var allTreatments: [TreatmentEvent]
+    @Query private var allHydration: [HydrationLog]
 
     @State private var selectedTab: AppTab = .home
     @State private var selectedLogKind: LogEntryKind = .reading
@@ -18,6 +20,7 @@ struct ContentView: View {
     @State private var activeTimelineEditor: TimelineEditorRoute?
     @State private var showsSettings = false
     @State private var showsChat = false
+    @State private var showsCloset = false
     @State private var chatSeedPrompt: String?
     @State private var didRunLaunchTasks = false
 
@@ -47,6 +50,7 @@ struct ContentView: View {
                     if let preferences = allPreferences.first {
                         InsightService(modelContext: modelContext, preferences: preferences)
                             .evaluate(readings: allReadings)
+                        evaluateOxypoints()
                     }
                 }
             }
@@ -68,7 +72,8 @@ struct ContentView: View {
                             onOpenChat: {
                                 chatSeedPrompt = nil
                                 showsChat = true
-                            }
+                            },
+                            onOpenCloset: { showsCloset = true }
                         )
                     case .log:
                         QuickLogView(
@@ -104,6 +109,9 @@ struct ContentView: View {
         .fullScreenCover(isPresented: $showsChat) {
             ChatView(preferences: preferences)
         }
+        .sheet(isPresented: $showsCloset) {
+            OxyClosetView(preferences: preferences)
+        }
     }
 
     // MARK: - Launch orchestration
@@ -127,7 +135,27 @@ struct ContentView: View {
         if let preferences = allPreferences.first {
             InsightService(modelContext: modelContext, preferences: preferences)
                 .evaluate(readings: allReadings)
+            evaluateOxypoints()
         }
+    }
+
+    /// Mint today's Oxypoints earns for whatever conditions are met.
+    /// De-duped inside OxypointsService so calling repeatedly is safe.
+    private func evaluateOxypoints() {
+        let calendar = Calendar.current
+        let takesMedication = allTreatments.contains { $0.type == .medication }
+        let recentTreatments = allTreatments.filter {
+            calendar.isDateInToday($0.timestamp)
+        }
+        let recentReadings = allReadings.filter {
+            calendar.isDateInToday($0.timestamp)
+        }
+        OxypointsService(modelContext: modelContext).evaluateEarns(
+            readings: recentReadings,
+            treatments: recentTreatments,
+            hydration: allHydration,
+            takesMedication: takesMedication
+        )
     }
 
     private func importHealthKitMedications() async {

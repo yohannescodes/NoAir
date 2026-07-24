@@ -17,9 +17,12 @@ struct SettingsView: View {
 
     @State private var showsBaselineEditor = false
     @State private var showsDisclaimer = false
+    @State private var showsNotificationPreAsk = false
     @State private var reminderTimeAM: Date = Self.timeOfDay(hour: 8)
     @State private var reminderTimePM: Date = Self.timeOfDay(hour: 20)
     @State private var remindersEnabled: Bool = false
+
+    private let reminderService = ReadingReminderService()
 
     var body: some View {
         NavigationStack {
@@ -51,6 +54,12 @@ struct SettingsView: View {
             .sheet(isPresented: $showsDisclaimer) {
                 DisclaimerDetailSheet()
                     .presentationDetents([.medium, .large])
+            }
+            .sheet(isPresented: $showsNotificationPreAsk) {
+                NotificationPreAskSheet(onEnable: {
+                    Task { await enableReminders() }
+                })
+                .presentationDetents([.medium])
             }
         }
     }
@@ -160,7 +169,18 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 6) {
             groupHeader("REMINDERS")
             VStack(spacing: 0) {
-                Toggle(isOn: $remindersEnabled) {
+                Toggle(isOn: Binding(
+                    get: { remindersEnabled },
+                    set: { newValue in
+                        if newValue {
+                            showsNotificationPreAsk = true
+                        } else {
+                            reminderService.cancelReminder()
+                            remindersEnabled = false
+                            UserDefaults.standard.set(false, forKey: ReadingReminderService.enabledKey)
+                        }
+                    }
+                )) {
                     Text("Reading reminders")
                         .font(.system(size: 13, weight: .bold, design: .rounded))
                         .foregroundStyle(Theme.textPrimary)
@@ -297,6 +317,22 @@ struct SettingsView: View {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .strokeBorder(Theme.stroke, lineWidth: 1)
             )
+    }
+
+    /// Fire the system permission prompt from inside the pre-ask flow.
+    /// If it grants, schedule the actual reminder at the user's chosen
+    /// morning time; if it denies, silently flip the toggle back.
+    private func enableReminders() async {
+        let status = await reminderService.requestAuthorizationIfNeeded()
+        guard status == .authorized || status == .provisional else {
+            remindersEnabled = false
+            return
+        }
+        remindersEnabled = true
+        UserDefaults.standard.set(true, forKey: ReadingReminderService.enabledKey)
+        // Default cadence: every 12h for now (Phase 5 wires proper AM/PM
+        // schedule from the two DatePickers).
+        _ = try? await reminderService.schedule(intervalMinutes: 12 * 60, anchorDate: reminderTimeAM)
     }
 
     private static func timeOfDay(hour: Int) -> Date {
