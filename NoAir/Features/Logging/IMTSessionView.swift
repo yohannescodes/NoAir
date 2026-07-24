@@ -154,7 +154,11 @@ struct IMTSessionView: View {
     }
 
     private func startTicking() {
-        stop()
+        // Only invalidate the timer here — DON'T call stop(), because
+        // stop() also flips isRunning=false, which the caller has just
+        // set to true. That was the "why does the button say Resume
+        // while I'm breathing?" bug.
+        timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: phaseDurationSeconds, repeats: true) { _ in
             Task { @MainActor in self.tick() }
         }
