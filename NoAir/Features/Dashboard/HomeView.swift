@@ -313,7 +313,7 @@ struct HomeView: View {
                 Text("Hydration")
                     .font(.system(size: 13, weight: .bold, design: .rounded))
                     .foregroundStyle(Theme.textPrimary)
-                Text("\(hydrationCount)/\(HydrationLog.questTarget) cups today")
+                Text("\(hydrationMlToday)/\(preferences.targetMl) ml today")
                     .font(.system(size: 11, design: .rounded))
                     .foregroundStyle(Theme.textSecondary)
             }
@@ -398,7 +398,7 @@ struct HomeView: View {
         return hydrationLogs.first { $0.day == start }
     }
 
-    private var hydrationCount: Int { hydrationLogToday?.count ?? 0 }
+    private var hydrationMlToday: Int { hydrationLogToday?.ml ?? 0 }
 
     private var readingLoggedToday: Bool {
         readings.contains { Calendar.current.isDateInToday($0.timestamp) }
@@ -418,16 +418,23 @@ struct HomeView: View {
             ),
             Quest(
                 id: "hydrate",
-                title: "Hit 8 cups of water",
-                meta: "\(hydrationCount)/\(HydrationLog.questTarget)",
-                isDone: hydrationCount >= HydrationLog.questTarget,
+                title: "Hit your water target",
+                meta: "\(hydrationMlToday)/\(preferences.targetMl) ml",
+                isDone: hydrationMlToday >= preferences.targetMl,
                 action: { addHydration() }
             ),
         ]
     }
 
     private var streak: LoggingStreakService.Streak {
-        streakService.streak(readings: readings, ventilations: ventilations, treatments: treatments, labs: labs)
+        let takesMedication = treatments.contains { $0.type == .medication }
+        return streakService.streak(inputs: .init(
+            readings: readings,
+            treatments: treatments,
+            hydration: hydrationLogs,
+            takesMedication: takesMedication,
+            restDays: []
+        ))
     }
 
     private var environmentTrigger: EnvironmentTrigger? {
@@ -498,13 +505,17 @@ struct HomeView: View {
     private func addHydration() {
         let start = Calendar.current.startOfDay(for: .now)
         if let existing = hydrationLogToday {
-            existing.increment()
+            existing.addMl(preferences.hydrationUnit.incrementStepMl)
         } else {
-            modelContext.insert(HydrationLog(day: start, count: 1))
+            modelContext.insert(HydrationLog(
+                day: start,
+                ml: preferences.hydrationUnit.incrementStepMl,
+                targetMl: preferences.targetMl
+            ))
         }
         try? modelContext.save()
 
-        if hydrationCount >= HydrationLog.questTarget {
+        if hydrationMlToday >= preferences.targetMl {
             fireCelebration(key: "hydrate")
         }
         evaluateAllDoneCelebration()

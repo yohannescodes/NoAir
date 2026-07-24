@@ -90,7 +90,7 @@ struct QuickLogView: View {
                 hydrationCount: hydrationCountToday,
                 onAdd: {
                     addHydration()
-                    savedNote = "Cup logged. \(hydrationCountToday)/\(HydrationLog.questTarget) today."
+                    savedNote = "Cup logged. \(hydrationCountToday)/\(Int(HydrationLog.defaultTargetMl / HydrationLog.mlPerCup)) today."
                 }
             )
             .transition(.opacity.combined(with: .move(edge: .top)))
@@ -207,17 +207,21 @@ struct QuickLogView: View {
 
     // MARK: - Hydration helpers
 
+    /// Legacy cup count derived from the new ml-based store: total ml / 250.
+    /// Phase 2 replaces this whole tile with the C7 ml/cup unit-aware surface.
     private var hydrationCountToday: Int {
         let start = Calendar.current.startOfDay(for: .now)
-        return hydrationLogs.first { $0.day == start }?.count ?? 0
+        let ml = hydrationLogs.first { $0.day == start }?.ml ?? 0
+        return ml / HydrationLog.mlPerCup
     }
 
     private func addHydration() {
         let start = Calendar.current.startOfDay(for: .now)
         if let existing = hydrationLogs.first(where: { $0.day == start }) {
-            existing.increment()
+            existing.addMl()
         } else {
-            modelContext.insert(HydrationLog(day: start, count: 1))
+            let log = HydrationLog(day: start, ml: HydrationLog.mlPerCup)
+            modelContext.insert(log)
         }
         try? modelContext.save()
     }
@@ -451,7 +455,7 @@ private struct WaterQuickTile: View {
                 Text("Cups today")
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
                     .foregroundStyle(Theme.textSecondary)
-                Text("\(hydrationCount) / \(HydrationLog.questTarget)")
+                Text("\(hydrationCount) / \(Int(HydrationLog.defaultTargetMl / HydrationLog.mlPerCup))")
                     .font(.system(size: 24, weight: .heavy, design: .rounded))
                     .foregroundStyle(Theme.textPrimary)
                     .contentTransition(.numericText())
@@ -557,8 +561,9 @@ private struct TreatmentCaptureCard: View {
         switch type {
         case .phlebotomy: "How much was drawn? Any notes about how it went?"
         case .medication: "What med, what dose, and anything worth remembering?"
-        case .hospitalVisit: "What happened at the visit?"
-        case .oxygenAdjustment: "What changed — flow rate, hours, device?"
+        case .ventilation: "How did the session go?"
+        case .erVisit: "What sent you in, and what happened?"
+        case .hospitalization: "Reason for admission, and anything to remember."
         case .custom: "Anything to record about it?"
         }
     }
@@ -567,8 +572,9 @@ private struct TreatmentCaptureCard: View {
         switch type {
         case .phlebotomy: "e.g. 400ml drawn, felt fine after"
         case .medication: "e.g. Sildenafil 20mg, morning dose"
-        case .hospitalVisit: "e.g. Dr. Kim, echo scheduled next week"
-        case .oxygenAdjustment: "e.g. bumped from 2L to 3L overnight"
+        case .ventilation: "e.g. 20 min session, 74% → 81%"
+        case .erVisit: "e.g. Chest pain, sent home after workup"
+        case .hospitalization: "e.g. Admitted for IV antibiotics, 3 nights"
         case .custom: "Describe it in your own words"
         }
     }

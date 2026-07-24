@@ -18,7 +18,7 @@ struct OnboardingView: View {
 
     let preferences: UserPreferences
 
-    @State private var chat: [ChatMessage] = []
+    @State private var chat: [OnboardingBubble] = []
     @State private var step: Step = .track
     @State private var selectedTracked: Set<TrackOption> = []
     @State private var baseline: Int = 78
@@ -60,7 +60,7 @@ struct OnboardingView: View {
     private let tailID = "chat-tail"
 
     @ViewBuilder
-    private func bubble(_ message: ChatMessage) -> some View {
+    private func bubble(_ message: OnboardingBubble) -> some View {
         switch message.source {
         case .mascot:
             HStack(alignment: .bottom, spacing: 8) {
@@ -313,13 +313,13 @@ struct OnboardingView: View {
         }
     }
 
-    private func push(_ message: ChatMessage) {
+    private func push(_ message: OnboardingBubble) {
         withAnimation(.spring(duration: 0.35, bounce: 0.25)) {
             chat.append(message)
         }
     }
 
-    private func pushAfter(_ seconds: TimeInterval, _ message: ChatMessage) {
+    private func pushAfter(_ seconds: TimeInterval, _ message: OnboardingBubble) {
         DispatchQueue.main.asyncAfter(deadline: .now() + seconds) {
             push(message)
         }
@@ -336,14 +336,14 @@ struct OnboardingView: View {
 
 // MARK: - Chat model
 
-private struct ChatMessage: Identifiable, Equatable {
+private struct OnboardingBubble: Identifiable, Equatable {
     enum Source { case mascot, user }
     let id = UUID()
     let source: Source
     let text: String
 
-    static func mascot(_ text: String) -> ChatMessage { .init(source: .mascot, text: text) }
-    static func user(_ text: String) -> ChatMessage { .init(source: .user, text: text) }
+    static func mascot(_ text: String) -> OnboardingBubble { .init(source: .mascot, text: text) }
+    static func user(_ text: String) -> OnboardingBubble { .init(source: .user, text: text) }
 }
 
 // MARK: - Onboarding step machine
