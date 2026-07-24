@@ -1,8 +1,20 @@
 import Foundation
 
-/// Computes the manual-logging streak from record timestamps.
-/// Pure derivation — nothing is persisted. The streak rewards the habit of
-/// logging (any entry type counts), never the health values themselves.
+/// Streak calculation redefined per Spec v2 §20.
+///
+/// A day keeps the streak when the user completes the *logs that matter*:
+/// blood oxygen + heart rate + medication (only if the user is on meds) +
+/// hitting the fluid-aware water target. Apple Watch samples count the same
+/// as manual entries — a ReadingRecord logged manually and a passive HK
+/// sample both satisfy their condition.
+///
+/// The rest-day spend (🪙200 to save a broken day) is not applied here — that
+/// lives in `OxypointsService` because it mints a ledger row. This service
+/// answers "was the day condition met from raw data alone?"; the caller
+/// combines that with rest-day usage when rendering the flame.
+///
+/// Nothing is persisted; every call is a pure derivation from the record
+/// arrays passed in.
 struct LoggingStreakService {
     struct Streak {
         let current: Int
@@ -10,50 +22,83 @@ struct LoggingStreakService {
         let loggedToday: Bool
     }
 
+    /// Inputs the streak needs. Any array can be empty; that just means the
+    /// corresponding condition is unmet for those days.
+    struct Inputs {
+        var readings: [ReadingRecord] = []
+        var treatments: [TreatmentEvent] = []
+        var hydration: [HydrationLog] = []
+        /// Set true if the user is currently prescribed medication. When
+        /// false the medication condition is dropped so people who don't
+        /// take meds aren't penalized.
+        var takesMedication: Bool = false
+        /// Historical rest-day passes already spent. Each entry protects
+        /// exactly one day.
+        var restDays: Set<Date> = []
+    }
+
     func streak(
-        readings: [ReadingRecord],
-        ventilations: [VentilationSession],
-        treatments: [TreatmentEvent],
-        labs: [LabResultRecord],
+        inputs: Inputs,
         calendar: Calendar = .current,
         today: Date = .now
     ) -> Streak {
-        let timestamps =
-            readings.map(\.timestamp) +
-            ventilations.map(\.startTime) +
-            treatments.map(\.timestamp) +
-            labs.map(\.timestamp)
+        let normalizedRestDays = Set(inputs.restDays.map { calendar.startOfDay(for: $0) })
 
-        let loggedDays = Set(timestamps.map { calendar.startOfDay(for: $0) })
-        guard !loggedDays.isEmpty else {
-            return Streak(current: 0, best: 0, loggedToday: false)
+        // Bucket the source rows per calendar day once.
+        let readingsByDay = Dictionary(grouping: inputs.readings) { calendar.startOfDay(for: $0.timestamp) }
+        let treatmentsByDay = Dictionary(grouping: inputs.treatments) { calendar.startOfDay(for: $0.timestamp) }
+        let hydrationByDay = Dictionary(uniqueKeysWithValues: inputs.hydration.map { (calendar.startOfDay(for: $0.day), $0) })
+
+        // A day counts if all applicable conditions are met OR a rest day was spent on it.
+        func dayCounts(_ day: Date) -> Bool {
+            if normalizedRestDays.contains(day) { return true }
+            let readings = readingsByDay[day] ?? []
+            let treatments = treatmentsByDay[day] ?? []
+            let hasSpO2 = readings.contains { $0.spo2 != nil }
+            let hasHR = readings.contains { $0.pulse != nil }
+            let hasMedication = treatments.contains { $0.type == .medication }
+            let waterHit = hydrationByDay[day]?.isTargetMet ?? false
+            let medOK = !inputs.takesMedication || hasMedication
+            return hasSpO2 && hasHR && medOK && waterHit
         }
 
         let startOfToday = calendar.startOfDay(for: today)
-        let loggedToday = loggedDays.contains(startOfToday)
+        let loggedToday = dayCounts(startOfToday)
 
-        // Current streak: consecutive days ending today (or yesterday if today
-        // hasn't been logged yet — the streak isn't broken until the day ends).
+        // Current streak: consecutive days ending today (or yesterday if
+        // today isn't complete yet — the day isn't lost until it ends).
         var current = 0
-        var cursor = loggedToday ? startOfToday : calendar.date(byAdding: .day, value: -1, to: startOfToday)!
-        while loggedDays.contains(cursor) {
+        var cursor = loggedToday ? startOfToday : (calendar.date(byAdding: .day, value: -1, to: startOfToday) ?? startOfToday)
+        while dayCounts(cursor) {
             current += 1
             guard let previous = calendar.date(byAdding: .day, value: -1, to: cursor) else { break }
             cursor = previous
         }
 
-        // Best streak: longest run of consecutive logged days.
+        // Best streak: longest run of consecutive counting days across the
+        // observed history. We only need to check days where something was
+        // logged plus any rest days, because a day with no rows and no rest
+        // never counts.
+        let candidateDays = Set(readingsByDay.keys)
+            .union(treatmentsByDay.keys)
+            .union(hydrationByDay.keys)
+            .union(normalizedRestDays)
         var best = 0
         var run = 0
-        var previousDay: Date?
-        for day in loggedDays.sorted() {
-            if let previousDay, calendar.date(byAdding: .day, value: 1, to: previousDay) == day {
+        var previous: Date?
+        for day in candidateDays.sorted() {
+            guard dayCounts(day) else {
+                run = 0
+                previous = day
+                continue
+            }
+            if let previous, calendar.date(byAdding: .day, value: 1, to: previous) == day {
                 run += 1
             } else {
                 run = 1
             }
             best = max(best, run)
-            previousDay = day
+            previous = day
         }
 
         return Streak(current: current, best: best, loggedToday: loggedToday)
