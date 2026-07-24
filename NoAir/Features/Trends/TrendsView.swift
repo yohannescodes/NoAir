@@ -219,7 +219,7 @@ struct TrendsView: View {
             } else {
                 VStack(alignment: .leading, spacing: 12) {
                     ForEach(readings.prefix(8), id: \.id) { reading in
-                        let zone = reading.spo2.map(SpO2Zone.init(spo2:))
+                        let zone = reading.spo2.map { SpO2Zone(spo2: $0) }
                         HStack(alignment: .firstTextBaseline, spacing: 12) {
                             Text(reading.spo2.map { "\($0)%" } ?? "HR only")
                                 .font(Typography.metric)

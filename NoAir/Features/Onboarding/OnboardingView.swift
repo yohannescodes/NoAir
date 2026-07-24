@@ -490,7 +490,7 @@ struct ChipFlow: Layout {
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let maxWidth = proposal.width ?? .infinity
-        var rows = layoutRows(subviews: subviews, maxWidth: maxWidth)
+        let rows = layoutRows(subviews: subviews, maxWidth: maxWidth)
         var totalHeight: CGFloat = 0
         for row in rows.indices {
             totalHeight += rows[row].height
