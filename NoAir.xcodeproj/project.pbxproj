@@ -272,6 +272,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NoAir/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Oxylittle;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "NoAir reads oxygen, heart, sleep, and activity data from Health to give context to your manual readings.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "NoAir saves your manually logged SpO2 and pulse readings to Health.";
@@ -316,6 +317,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NoAir/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Oxylittle;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "NoAir reads oxygen, heart, sleep, and activity data from Health to give context to your manual readings.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "NoAir saves your manually logged SpO2 and pulse readings to Health.";
