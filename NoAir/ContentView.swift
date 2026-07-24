@@ -18,7 +18,6 @@ struct ContentView: View {
     @State private var selectedLogKind: LogEntryKind = .reading
     @State private var timelineFilter: TimelineFilter = .all
     @State private var activeTimelineEditor: TimelineEditorRoute?
-    @State private var showsSettings = false
     @State private var showsChat = false
     @State private var showsCloset = false
     @State private var chatSeedPrompt: String?
@@ -98,7 +97,6 @@ struct ContentView: View {
                             selectedLogKind: $selectedLogKind,
                             readingEnricher: readingEnricher,
                             preferences: preferences,
-                            onOpenSettings: { showsSettings = true },
                             onOpenChat: {
                                 chatSeedPrompt = nil
                                 showsChat = true
@@ -118,6 +116,8 @@ struct ContentView: View {
                         TrendsView(preferences: preferences)
                     case .timeline:
                         TimelineView(filter: $timelineFilter, activeEditor: $activeTimelineEditor)
+                    case .settings:
+                        SettingsView(preferences: preferences)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -133,9 +133,6 @@ struct ContentView: View {
             NABottomTabBar(selection: $selectedTab)
         }
         .background(Theme.background.ignoresSafeArea())
-        .sheet(isPresented: $showsSettings) {
-            SettingsView(preferences: preferences)
-        }
         .fullScreenCover(isPresented: $showsChat) {
             ChatView(readingEnricher: readingEnricher, preferences: preferences)
         }
@@ -211,6 +208,7 @@ struct NABottomTabBar: View {
         (.log, "plus.circle", "Log"),
         (.trends, "chart.line.uptrend.xyaxis", "Trends"),
         (.timeline, "list.bullet", "Timeline"),
+        (.settings, "gearshape", "Settings"),
     ]
 
     var body: some View {

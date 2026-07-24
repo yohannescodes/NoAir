@@ -12,7 +12,6 @@ struct HomeView: View {
     @Binding var selectedLogKind: LogEntryKind
     let readingEnricher: ReadingEnricher
     let preferences: UserPreferences
-    var onOpenSettings: () -> Void = {}
     var onOpenChat: () -> Void = {}
     var onOpenCloset: () -> Void = {}
 
@@ -148,12 +147,11 @@ struct HomeView: View {
 
     // MARK: - Sections
 
-    /// Two-row header. Squeezing greeting + four affordances into one
-    /// row wrapped mid-word ("Yohanne · s") on longer names, so:
-    ///   row 1 — greeting alone, no wrap, gets the whole width
-    ///   row 2 — coin + streak pills (left) · refresh + gear (right)
-    /// This scales cleanly to any name length and keeps every affordance
-    /// at a full tap target instead of shrinking to fit.
+    /// Two-row header. Greeting on its own row (no mid-word wrap on
+    /// longer names). Second row: coin + streak pills (leading), refresh
+    /// (trailing). The gear used to live here as a shortcut to a
+    /// Settings modal — Settings is now tab 5 per Flow v2, so the
+    /// tab bar handles that route.
     private var header: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(greeting)
@@ -168,14 +166,6 @@ struct HomeView: View {
                 streakPill
                 Spacer(minLength: 8)
                 refreshHeaderButton
-                Button(action: onOpenSettings) {
-                    Image(systemName: "gearshape")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(Theme.textTertiary)
-                        .frame(width: 32, height: 32)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Settings")
             }
         }
     }

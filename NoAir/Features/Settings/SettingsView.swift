@@ -25,10 +25,10 @@ struct SettingsView: View {
     private let reminderService = ReadingReminderService()
 
     var body: some View {
-        NABrandNavBar(
-            title: "Settings",
-            trailing: .quiet("Done") { dismiss() }
-        ) {
+        // Settings is a first-class tab (Flow v2 D1) not a modal, so no
+        // Done/dismiss action in the nav bar — the user leaves by
+        // tapping another tab.
+        NABrandNavBar(title: "Settings") {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     profileCard
