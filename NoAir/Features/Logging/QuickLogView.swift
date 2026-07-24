@@ -1,23 +1,24 @@
 import SwiftData
 import SwiftUI
 
-/// Chip-first log entry.
+/// Chip-first log entry per Screens v2 §C.
 ///
-/// The mascot asks "What should I log for you?" and the user picks a mode
-/// from a wrap-flow chip row. Each mode uses a lightweight, single-purpose
-/// surface — a slider, a chat-style capture, or a two-level chip picker —
-/// instead of a form dump. Bad-day-friendly: one decision at a time.
+/// The Log tab is a conversational shell: Oxy asks, chips answer. Each
+/// variant is a self-contained card so the tab stays scannable during a
+/// flare. Kinds:
 ///
-/// Chip list (Spec + user direction):
-/// - O2 Saturation → draggable slider, writes ReadingRecord
-/// - Water → increment tile, writes HydrationLog
-/// - Heart Rate → draggable slider 30-200, writes ReadingRecord.pulse only
-/// - Lab Results → chip pick kind, then chat capture, writes LabResultRecord
-/// - Ventilation Session → chat-guided before/after capture, writes
-///   VentilationSession
-/// - Treatment → second-level TreatmentType chip picker, then chat capture,
-///   writes TreatmentEvent
-/// - Something else → free-form text capture, writes JournalEntry
+/// - **Blood oxygen** (§C1) — big draggable value + context/symptoms chips
+///   + note → `ReadingRecord`
+/// - **Heart rate** (§C2) — standalone bpm card → `ReadingRecord` with
+///   `spo2 = nil`
+/// - **Ventilation** (§C3) — before/after paired capture → `VentilationSession`
+/// - **Treatment** (§C4) — sub-typed picker + type-specific prompts →
+///   `TreatmentEvent`; medication rows can be HK-synced (badge shown)
+/// - **Lab result** (§C5) — lab-kind chips + value/unit/range → `LabResultRecord`
+/// - **Journal** (§C6) — free text → `JournalEntry`
+/// - **Water** (§C7) — unit-aware +/- against fluid-aware target →
+///   `HydrationLog`
+/// - **IMT breathing** (§C9) — hands off to the full-screen session
 struct QuickLogView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(HealthKitService.self) private var healthKitService
@@ -33,6 +34,7 @@ struct QuickLogView: View {
 
     @State private var mode: LogMode = .none
     @State private var savedNote: String?
+    @State private var showsIMTSession = false
 
     var body: some View {
         ScrollView {
@@ -60,6 +62,13 @@ struct QuickLogView: View {
         }
         .background(Theme.background.ignoresSafeArea())
         .scrollDismissesKeyboard(.interactively)
+        .fullScreenCover(isPresented: $showsIMTSession) {
+            IMTSessionView(onFinish: {
+                showsIMTSession = false
+                savedNote = "Nice — set logged."
+                mode = .none
+            })
+        }
     }
 
     // MARK: - Mode dispatcher
@@ -70,45 +79,46 @@ struct QuickLogView: View {
         case .none:
             EmptyView()
 
-        case .o2:
-            ReadingSliderCard(
+        case .bloodOxygen:
+            SpO2CaptureCard(
                 preferences: preferences,
                 readingEnricher: readingEnricher,
-                onSaved: { savedNote = "Saved. Oxy noted it — see you at the next check-in." }
+                onSaved: { savedNote = "Reading saved. Oxy noted it." }
             )
             .transition(.opacity.combined(with: .move(edge: .top)))
 
         case .heartRate:
-            HeartRateSliderCard(
+            HeartRateCaptureCard(
                 readingEnricher: readingEnricher,
                 onSaved: { bpm in savedNote = "\(bpm) bpm logged." }
             )
             .transition(.opacity.combined(with: .move(edge: .top)))
-
-        case .water:
-            WaterQuickTile(
-                hydrationCount: hydrationCountToday,
-                onAdd: {
-                    addHydration()
-                    savedNote = "Cup logged. \(hydrationCountToday)/\(Int(HydrationLog.defaultTargetMl / HydrationLog.mlPerCup)) today."
-                }
-            )
-            .transition(.opacity.combined(with: .move(edge: .top)))
-
-        case .lab:
-            LabCaptureCard(onSaved: { name in savedNote = "\(name) logged." })
-                .transition(.opacity.combined(with: .move(edge: .top)))
 
         case .ventilation:
             VentilationCaptureCard(onSaved: { savedNote = "Ventilation session saved." })
                 .transition(.opacity.combined(with: .move(edge: .top)))
 
         case .treatment:
-            TreatmentCaptureCard(onSaved: { type in savedNote = "\(type.rawValue) saved." })
+            TreatmentCaptureCard(onSaved: { name in savedNote = "\(name) saved." })
+                .transition(.opacity.combined(with: .move(edge: .top)))
+
+        case .lab:
+            LabCaptureCard(onSaved: { name in savedNote = "\(name) logged." })
                 .transition(.opacity.combined(with: .move(edge: .top)))
 
         case .journal:
             JournalCaptureCard(onSaved: { savedNote = "Noted. Oxy will remember this next time." })
+                .transition(.opacity.combined(with: .move(edge: .top)))
+
+        case .water:
+            WaterCaptureCard(
+                preferences: preferences,
+                onLog: { total in savedNote = "Logged. \(total)/\(preferences.targetMl) ml today." }
+            )
+            .transition(.opacity.combined(with: .move(edge: .top)))
+
+        case .imt:
+            IMTLaunchCard(onStart: { showsIMTSession = true })
                 .transition(.opacity.combined(with: .move(edge: .top)))
         }
     }
@@ -141,21 +151,17 @@ struct QuickLogView: View {
         }
     }
 
-    // MARK: - Chip row
+    // MARK: - Chip row (§C0)
 
     private var chipRow: some View {
         FlowLayout(spacing: 8) {
-            logChip(title: "O2 Saturation", target: .o2)
-            logChip(title: "Water", target: .water)
-            logChip(title: "Heart Rate", target: .heartRate)
-            logChip(title: "Lab Results", target: .lab)
-            logChip(title: "Ventilation Session", target: .ventilation)
-            logChip(title: "Treatment", target: .treatment)
-            logChip(title: "Something else", target: .journal)
+            ForEach(LogMode.pickerCases) { m in
+                logChip(m)
+            }
         }
     }
 
-    private func logChip(title: String, target: LogMode) -> some View {
+    private func logChip(_ target: LogMode) -> some View {
         let isSelected = mode == target
         return Button {
             withAnimation(.spring(duration: 0.3, bounce: 0.3)) {
@@ -163,7 +169,7 @@ struct QuickLogView: View {
                 savedNote = nil
             }
         } label: {
-            Text(title)
+            Text(target.label)
                 .font(.system(size: 13, weight: .bold, design: .rounded))
                 .foregroundStyle(
                     isSelected
@@ -204,43 +210,48 @@ struct QuickLogView: View {
                 )
         )
     }
-
-    // MARK: - Hydration helpers
-
-    /// Legacy cup count derived from the new ml-based store: total ml / 250.
-    /// Phase 2 replaces this whole tile with the C7 ml/cup unit-aware surface.
-    private var hydrationCountToday: Int {
-        let start = Calendar.current.startOfDay(for: .now)
-        let ml = hydrationLogs.first { $0.day == start }?.ml ?? 0
-        return ml / HydrationLog.mlPerCup
-    }
-
-    private func addHydration() {
-        let start = Calendar.current.startOfDay(for: .now)
-        if let existing = hydrationLogs.first(where: { $0.day == start }) {
-            existing.addMl()
-        } else {
-            let log = HydrationLog(day: start, ml: HydrationLog.mlPerCup)
-            modelContext.insert(log)
-        }
-        try? modelContext.save()
-    }
 }
 
-private enum LogMode: Equatable {
+// MARK: - Log mode enum
+
+enum LogMode: String, Identifiable, Equatable {
     case none
-    case o2
-    case water
+    case bloodOxygen
     case heartRate
-    case lab
     case ventilation
     case treatment
+    case lab
     case journal
+    case water
+    case imt
+
+    var id: String { rawValue }
+
+    /// Chip label shown in the picker. "Blood oxygen" over "SpO₂ reading"
+    /// per the user's preference for patient-friendly wording.
+    var label: String {
+        switch self {
+        case .none: ""
+        case .bloodOxygen: "Blood oxygen"
+        case .heartRate: "Heart rate"
+        case .ventilation: "Ventilation"
+        case .treatment: "Treatment"
+        case .lab: "Lab result"
+        case .journal: "Journal"
+        case .water: "Water"
+        case .imt: "IMT breathing"
+        }
+    }
+
+    /// Order matches Screens v2 §C0 top-to-bottom, left-to-right.
+    static var pickerCases: [LogMode] {
+        [.bloodOxygen, .heartRate, .ventilation, .treatment, .lab, .journal, .water, .imt]
+    }
 }
 
-// MARK: - Reading slider card (O2 Saturation)
+// MARK: - Blood oxygen (§C1)
 
-private struct ReadingSliderCard: View {
+private struct SpO2CaptureCard: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(HealthKitService.self) private var healthKitService
 
@@ -249,6 +260,9 @@ private struct ReadingSliderCard: View {
     let onSaved: () -> Void
 
     @State private var spo2: Double
+    @State private var context: ReadingContextTag = .resting
+    @State private var selectedSymptoms: Set<SymptomTag> = []
+    @State private var note: String = ""
     @State private var saveTick = 0
 
     init(preferences: UserPreferences, readingEnricher: ReadingEnricher, onSaved: @escaping () -> Void) {
@@ -261,49 +275,110 @@ private struct ReadingSliderCard: View {
     private var spo2Int: Int { Int(spo2.rounded()) }
     private var inZone: Bool { preferences.personalZoneRange.contains(spo2Int) }
 
-    private var zoneColor: Color {
-        if inZone { return Theme.accent }
-        return spo2Int < preferences.personalZoneRange.lowerBound ? Theme.warning : Theme.accent
-    }
-
-    private var zoneNote: String {
-        if inZone { return "This is within your normal zone." }
-        if spo2Int < preferences.personalZoneRange.lowerBound {
-            return "Lower than your usual — worth a note on what you were doing."
-        }
-        return "Higher than your recent average — nice."
-    }
-
     var body: some View {
-        VStack(spacing: 12) {
-            Text("Drag to set your SpO2")
-                .font(.system(size: 12.5, weight: .bold, design: .rounded))
-                .foregroundStyle(Theme.textSecondary)
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(spacing: 8) {
+                Text("Blood oxygen reading")
+                    .font(.system(size: 11.5, weight: .bold, design: .rounded))
+                    .foregroundStyle(Theme.textSecondary)
+                    .frame(maxWidth: .infinity)
+                Text("\(spo2Int)%")
+                    .font(.system(size: 40, weight: .heavy, design: .rounded))
+                    .foregroundStyle(inZone ? Theme.accent : Theme.warning)
+                    .contentTransition(.numericText())
+                    .frame(maxWidth: .infinity)
+                SpO2SliderTrack(value: $spo2, range: 60...100)
+                    .frame(height: 20)
+                Text(inZone ? "Within your normal zone" : (spo2Int < preferences.personalZoneRange.lowerBound ? "A little below your usual" : "Above your usual"))
+                    .font(.system(size: 10.5, design: .rounded))
+                    .foregroundStyle(Theme.textTertiary)
+                    .frame(maxWidth: .infinity)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity)
+            .background(cardBackground)
 
-            Text("\(spo2Int)%")
-                .font(.system(size: 48, weight: .heavy, design: .rounded))
-                .foregroundStyle(zoneColor)
-                .contentTransition(.numericText())
+            sectionLabel("CONTEXT")
+            FlowLayout(spacing: 6) {
+                ForEach(ReadingContextTag.allCases) { tag in
+                    contextChip(tag)
+                }
+            }
 
-            SpO2SliderTrack(value: $spo2, range: 60...100)
-                .frame(height: 20)
+            sectionLabel("SYMPTOMS")
+            FlowLayout(spacing: 6) {
+                ForEach(SymptomTag.allCases) { symptom in
+                    symptomChip(symptom)
+                }
+            }
 
-            Text(zoneNote)
-                .font(.system(size: 11, design: .rounded))
-                .foregroundStyle(Theme.textTertiary)
+            TextField("Add a note…", text: $note, axis: .vertical)
+                .lineLimit(2...)
+                .font(.system(size: 13, design: .rounded))
+                .foregroundStyle(Theme.textPrimary)
+                .textInputAutocapitalization(.sentences)
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Theme.surfaceInput)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .strokeBorder(Theme.stroke, lineWidth: 1)
+                        )
+                )
 
             Button("Save reading") { save() }
                 .buttonStyle(NAPrimaryButtonStyle())
-                .padding(.top, 6)
         }
-        .padding(20)
-        .frame(maxWidth: .infinity)
-        .background(cardBackground)
         .sensoryFeedback(.success, trigger: saveTick)
     }
 
+    private func contextChip(_ tag: ReadingContextTag) -> some View {
+        let selected = context == tag
+        return Button { context = tag } label: {
+            Text(tag.rawValue)
+                .font(.system(size: 11.5, weight: .bold, design: .rounded))
+                .foregroundStyle(selected ? Theme.onAccent : Theme.textSecondary)
+                .padding(.horizontal, 11)
+                .padding(.vertical, 6)
+                .background(
+                    Capsule().fill(selected ? Theme.accent : Color.clear)
+                )
+                .overlay(
+                    Capsule().strokeBorder(selected ? .clear : Theme.stroke, lineWidth: 1.5)
+                )
+        }
+        .buttonStyle(NAPressableButtonStyle())
+    }
+
+    private func symptomChip(_ symptom: SymptomTag) -> some View {
+        let selected = selectedSymptoms.contains(symptom)
+        return Button {
+            if selected { selectedSymptoms.remove(symptom) } else { selectedSymptoms.insert(symptom) }
+        } label: {
+            Text(symptom.rawValue)
+                .font(.system(size: 11.5, weight: .bold, design: .rounded))
+                .foregroundStyle(selected ? Color(uiColor: .init(red: 1.0, green: 0.72, blue: 0.47, alpha: 1)) : Theme.textSecondary)
+                .padding(.horizontal, 11)
+                .padding(.vertical, 6)
+                .background(
+                    Capsule().fill(selected ? Theme.warning.opacity(0.18) : Color.clear)
+                )
+                .overlay(
+                    Capsule().strokeBorder(selected ? Theme.warning.opacity(0.5) : Theme.stroke, lineWidth: 1.5)
+                )
+        }
+        .buttonStyle(NAPressableButtonStyle())
+    }
+
     private func save() {
-        let reading = ReadingRecord(timestamp: .now, spo2: FormSupport.clampSpO2(spo2Int))
+        let reading = ReadingRecord(
+            timestamp: .now,
+            spo2: FormSupport.clampSpO2(spo2Int),
+            context: context.rawValue,
+            symptoms: selectedSymptoms.map(\.rawValue).sorted(),
+            note: FormSupport.clean(note)
+        )
         modelContext.insert(reading)
         try? modelContext.save()
         saveTick += 1
@@ -318,99 +393,67 @@ private struct ReadingSliderCard: View {
     }
 }
 
-// MARK: - Custom SpO2 slider
+// MARK: - Heart rate (§C2)
 
-/// Screen 9's slider: 6pt track, 20pt round knob with a 3pt background-color
-/// border. Range-agnostic — reused by both the SpO2 and HR modes.
-struct SpO2SliderTrack: View {
-    @Binding var value: Double
-    let range: ClosedRange<Double>
-
-    var body: some View {
-        GeometryReader { proxy in
-            let width = proxy.size.width
-            let knobSize: CGFloat = 20
-            let usableWidth = width - knobSize
-            let progress = CGFloat((value - range.lowerBound) / (range.upperBound - range.lowerBound))
-            let knobX = usableWidth * progress + knobSize / 2
-
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(Theme.surfaceElevated)
-                    .frame(height: 6)
-
-                Capsule()
-                    .fill(Theme.accent)
-                    .frame(width: max(0, knobX), height: 6)
-
-                Circle()
-                    .fill(Theme.accent)
-                    .overlay(Circle().strokeBorder(Theme.background, lineWidth: 3))
-                    .frame(width: knobSize, height: knobSize)
-                    .offset(x: knobX - knobSize / 2)
-            }
-            .frame(height: 20)
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { gesture in
-                        let raw = (gesture.location.x - knobSize / 2) / usableWidth
-                        let clamped = max(0, min(1, Double(raw)))
-                        let newValue = range.lowerBound + clamped * (range.upperBound - range.lowerBound)
-                        let stepped = newValue.rounded()
-                        if stepped != value {
-                            value = stepped
-                        }
-                    }
-            )
-        }
-    }
-}
-
-// MARK: - Heart Rate slider card
-
-private struct HeartRateSliderCard: View {
+private struct HeartRateCaptureCard: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(HealthKitService.self) private var healthKitService
 
     let readingEnricher: ReadingEnricher
     let onSaved: (Int) -> Void
 
-    @State private var bpm: Double = 80
+    @State private var bpm: Double = 71
     @State private var saveTick = 0
 
     private var bpmInt: Int { Int(bpm.rounded()) }
 
     var body: some View {
-        VStack(spacing: 12) {
-            Text("Drag to set your heart rate")
-                .font(.system(size: 12.5, weight: .bold, design: .rounded))
-                .foregroundStyle(Theme.textSecondary)
-
-            HStack(alignment: .lastTextBaseline, spacing: 6) {
-                Text("\(bpmInt)")
-                    .font(.system(size: 48, weight: .heavy, design: .rounded))
-                    .foregroundStyle(Theme.treatment)
-                    .contentTransition(.numericText())
-                Text("bpm")
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
-                    .foregroundStyle(Theme.textSecondary)
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .bottom, spacing: 8) {
+                OxyMascotView(mood: .calm, size: 30, showGlow: false)
+                Text("What's your pulse right now?")
+                    .font(.system(size: 12.5, design: .rounded))
+                    .foregroundStyle(Theme.textPrimary)
+                    .padding(.horizontal, 13)
+                    .padding(.vertical, 11)
+                    .background(
+                        UnevenRoundedRectangle(
+                            cornerRadii: .init(topLeading: 18, bottomLeading: 6, bottomTrailing: 18, topTrailing: 18),
+                            style: .continuous
+                        ).fill(Theme.surface)
+                    )
+                    .overlay(
+                        UnevenRoundedRectangle(
+                            cornerRadii: .init(topLeading: 18, bottomLeading: 6, bottomTrailing: 18, topTrailing: 18),
+                            style: .continuous
+                        ).strokeBorder(Theme.stroke, lineWidth: 1)
+                    )
+                Spacer(minLength: 0)
             }
 
-            SpO2SliderTrack(value: $bpm, range: 30...200)
-                .frame(height: 20)
-
-            Text("Tap to log without an SpO2 reading.")
-                .font(.system(size: 11, design: .rounded))
-                .foregroundStyle(Theme.textTertiary)
-
-            Button("Save heart rate") { save() }
-                .buttonStyle(NAPrimaryButtonStyle(tint: Theme.treatment, edge: Theme.treatment.opacity(0.55)))
-                .padding(.top, 6)
+            VStack(spacing: 12) {
+                Text("❤️").font(.system(size: 20))
+                Text("\(bpmInt)")
+                    .font(.system(size: 52, weight: .heavy, design: .rounded))
+                    .foregroundStyle(Theme.textPrimary)
+                    .contentTransition(.numericText())
+                Text("bpm")
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .foregroundStyle(Theme.textTertiary)
+                SpO2SliderTrack(value: $bpm, range: 30...200)
+                    .frame(height: 20)
+                    .padding(.top, 4)
+                Text("Typical for you at rest")
+                    .font(.system(size: 10.5, design: .rounded))
+                    .foregroundStyle(Theme.textTertiary)
+                Button("Save heart rate") { save() }
+                    .buttonStyle(NAPrimaryButtonStyle())
+                    .padding(.top, 4)
+            }
+            .padding(22)
+            .frame(maxWidth: .infinity)
+            .background(cardBackground)
         }
-        .padding(20)
-        .frame(maxWidth: .infinity)
-        .background(cardBackground)
         .sensoryFeedback(.success, trigger: saveTick)
     }
 
@@ -434,274 +477,675 @@ private struct HeartRateSliderCard: View {
     }
 }
 
-// MARK: - Water tile
+// MARK: - Ventilation (§C3)
 
-private struct WaterQuickTile: View {
-    let hydrationCount: Int
-    let onAdd: () -> Void
+private struct VentilationCaptureCard: View {
+    @Environment(\.modelContext) private var modelContext
+    let onSaved: () -> Void
+
+    @State private var beforeSpo2: Int = 74
+    @State private var beforePulse: Int = 62
+    @State private var afterSpo2: Int = 81
+    @State private var afterPulse: Int = 58
+    @State private var duration: DurationChoice = .twenty
+    @State private var reason: ReasonChoice = .scheduled
+
+    private enum DurationChoice: Int, CaseIterable, Identifiable {
+        case ten = 10, twenty = 20, thirty = 30
+        var id: Int { rawValue }
+        var label: String { "\(rawValue) min" }
+    }
+    private enum ReasonChoice: String, CaseIterable, Identifiable {
+        case scheduled = "Scheduled"
+        case breathless = "Felt breathless"
+        case exertion = "After exertion"
+        var id: String { rawValue }
+    }
+
+    private var deltaSpo2: Int { afterSpo2 - beforeSpo2 }
+    private var deltaPulse: Int { afterPulse - beforePulse }
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "drop.fill")
-                .font(.system(size: 20, weight: .bold))
-                .foregroundStyle(Theme.ventilation)
-                .frame(width: 44, height: 44)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Theme.surfaceElevated)
-                )
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Cups today")
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
-                    .foregroundStyle(Theme.textSecondary)
-                Text("\(hydrationCount) / \(Int(HydrationLog.defaultTargetMl / HydrationLog.mlPerCup))")
-                    .font(.system(size: 24, weight: .heavy, design: .rounded))
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .bottom, spacing: 8) {
+                OxyMascotView(mood: .calm, size: 28, showGlow: false)
+                Text("Let's capture before & after your session.")
+                    .font(.system(size: 12.5, design: .rounded))
                     .foregroundStyle(Theme.textPrimary)
-                    .contentTransition(.numericText())
-            }
-
-            Spacer(minLength: 0)
-
-            Button(action: onAdd) {
-                Image(systemName: "plus")
-                    .font(.system(size: 18, weight: .black))
-                    .foregroundStyle(Theme.onAccent)
-                    .frame(width: 40, height: 40)
+                    .padding(.horizontal, 13)
+                    .padding(.vertical, 11)
                     .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Theme.accent)
+                        UnevenRoundedRectangle(
+                            cornerRadii: .init(topLeading: 18, bottomLeading: 6, bottomTrailing: 18, topTrailing: 18),
+                            style: .continuous
+                        ).fill(Theme.surface)
                     )
+                    .overlay(
+                        UnevenRoundedRectangle(
+                            cornerRadii: .init(topLeading: 18, bottomLeading: 6, bottomTrailing: 18, topTrailing: 18),
+                            style: .continuous
+                        ).strokeBorder(Theme.stroke, lineWidth: 1)
+                    )
+                Spacer(minLength: 0)
             }
-            .buttonStyle(NAPressableButtonStyle())
+
+            HStack(spacing: 10) {
+                beforeAfterTile(title: "BEFORE", spo2: $beforeSpo2, pulse: $beforePulse, tint: Theme.ventilation)
+                beforeAfterTile(title: "AFTER", spo2: $afterSpo2, pulse: $afterPulse, tint: Theme.accent)
+            }
+
+            HStack(spacing: 6) {
+                Spacer()
+                Text("\(deltaSpo2 >= 0 ? "▲" : "▼") \(deltaSpo2 > 0 ? "+" : "")\(deltaSpo2)% saturation · \(deltaPulse > 0 ? "+" : "")\(deltaPulse) bpm")
+                    .font(.system(size: 12, weight: .heavy, design: .rounded))
+                    .foregroundStyle(Theme.accent)
+                Spacer()
+            }
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Theme.accent.opacity(0.10))
+            )
+
+            sectionLabel("DURATION")
+            HStack(spacing: 6) {
+                ForEach(DurationChoice.allCases) { choice in
+                    Button { duration = choice } label: {
+                        Text(choice.label)
+                            .font(.system(size: 12, weight: .bold, design: .rounded))
+                            .foregroundStyle(duration == choice ? Color.white : Theme.textSecondary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(
+                                Capsule().fill(duration == choice ? Theme.ventilation : Color.clear)
+                            )
+                            .overlay(
+                                Capsule().strokeBorder(duration == choice ? .clear : Theme.stroke, lineWidth: 1.5)
+                            )
+                    }
+                    .buttonStyle(NAPressableButtonStyle())
+                }
+            }
+
+            sectionLabel("REASON")
+            FlowLayout(spacing: 6) {
+                ForEach(ReasonChoice.allCases) { choice in
+                    Button { reason = choice } label: {
+                        Text(choice.rawValue)
+                            .font(.system(size: 11.5, weight: .bold, design: .rounded))
+                            .foregroundStyle(reason == choice ? Color.white : Theme.textSecondary)
+                            .padding(.horizontal, 11)
+                            .padding(.vertical, 6)
+                            .background(
+                                Capsule().fill(reason == choice ? Theme.ventilation : Color.clear)
+                            )
+                            .overlay(
+                                Capsule().strokeBorder(reason == choice ? .clear : Theme.stroke, lineWidth: 1.5)
+                            )
+                    }
+                    .buttonStyle(NAPressableButtonStyle())
+                }
+            }
+
+            Button("Save session") { save() }
+                .buttonStyle(NAPrimaryButtonStyle(tint: Theme.ventilation, edge: Theme.ventilation.opacity(0.55)))
         }
-        .padding(18)
-        .frame(maxWidth: .infinity)
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(cardBackground)
+    }
+
+    private func beforeAfterTile(title: String, spo2: Binding<Int>, pulse: Binding<Int>, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.system(size: 10, weight: .heavy, design: .rounded))
+                .foregroundStyle(tint)
+            HStack(alignment: .lastTextBaseline, spacing: 2) {
+                Stepper(value: spo2, in: 40...100) {
+                    HStack(alignment: .lastTextBaseline, spacing: 2) {
+                        Text("\(spo2.wrappedValue)")
+                            .font(.system(size: 26, weight: .heavy, design: .rounded))
+                            .foregroundStyle(Theme.textPrimary)
+                        Text("%")
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .foregroundStyle(Theme.textSecondary)
+                    }
+                }
+                .labelsHidden()
+                .fixedSize()
+            }
+            HStack(alignment: .lastTextBaseline, spacing: 2) {
+                Stepper(value: pulse, in: 30...200) {
+                    Text("\(pulse.wrappedValue) bpm")
+                        .font(.system(size: 11, design: .rounded))
+                        .foregroundStyle(Theme.textSecondary)
+                }
+                .labelsHidden()
+                .fixedSize()
+            }
+        }
+        .padding(13)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Theme.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .strokeBorder(tint.opacity(0.4), lineWidth: 1)
+                )
+        )
+    }
+
+    private func save() {
+        let session = VentilationSession(
+            startTime: Date().addingTimeInterval(TimeInterval(-duration.rawValue * 60)),
+            endTime: .now,
+            durationMinutes: duration.rawValue,
+            initialSaturation: beforeSpo2,
+            initialPulse: beforePulse,
+            finalSaturation: afterSpo2,
+            finalPulse: afterPulse,
+            reason: reason.rawValue,
+            note: nil
+        )
+        modelContext.insert(session)
+        try? modelContext.save()
+        onSaved()
     }
 }
 
-// MARK: - Treatment capture (second-level chips + note)
+// MARK: - Treatment (§C4)
 
 private struct TreatmentCaptureCard: View {
     @Environment(\.modelContext) private var modelContext
-    let onSaved: (TreatmentType) -> Void
+    let onSaved: (String) -> Void
 
-    @State private var selectedType: TreatmentType?
+    @State private var selectedType: TreatmentType = .medication
+
+    // Medication fields
+    @State private var medName: String = ""
+    @State private var medDose: String = ""
+    @State private var medTime: Date = .now
+    // Phlebotomy fields
+    @State private var phlebotomyVolume: String = ""
+    @State private var phlebotomyHctBefore: String = ""
+    @State private var phlebotomyHctAfter: String = ""
+    // ER Visit fields
+    @State private var erReason: String = ""
+    @State private var erOutcome: String = ""
+    // Hospitalization fields
+    @State private var hospReason: String = ""
+    @State private var hospAdmit: Date = .now
+    @State private var hospHasDischarge: Bool = false
+    @State private var hospDischarge: Date = .now
+    // Shared free-form note
     @State private var note: String = ""
-    @FocusState private var focused: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Which treatment?")
-                .font(.system(size: 13, weight: .heavy, design: .rounded))
-                .foregroundStyle(Theme.textPrimary)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .bottom, spacing: 8) {
+                OxyMascotView(mood: .calm, size: 28, showGlow: false)
+                Text("What kind of treatment?")
+                    .font(.system(size: 12.5, design: .rounded))
+                    .foregroundStyle(Theme.textPrimary)
+                    .padding(.horizontal, 13)
+                    .padding(.vertical, 11)
+                    .background(
+                        UnevenRoundedRectangle(
+                            cornerRadii: .init(topLeading: 18, bottomLeading: 6, bottomTrailing: 18, topTrailing: 18),
+                            style: .continuous
+                        ).fill(Theme.surface)
+                    )
+                    .overlay(
+                        UnevenRoundedRectangle(
+                            cornerRadii: .init(topLeading: 18, bottomLeading: 6, bottomTrailing: 18, topTrailing: 18),
+                            style: .continuous
+                        ).strokeBorder(Theme.stroke, lineWidth: 1)
+                    )
+                Spacer(minLength: 0)
+            }
 
-            FlowLayout(spacing: 8) {
-                ForEach(TreatmentType.allCases) { type in
+            FlowLayout(spacing: 6) {
+                ForEach(TreatmentType.pickerCases) { type in
                     typeChip(type)
                 }
             }
 
-            if let selectedType {
-                Divider()
-                    .overlay(Theme.stroke)
+            Divider().overlay(Theme.stroke)
 
-                Text(promptFor(selectedType))
-                    .font(.system(size: 13, design: .rounded))
-                    .foregroundStyle(Theme.textSecondary)
+            typeSpecificFields
+                .animation(.easeInOut(duration: 0.2), value: selectedType)
 
-                TextField(placeholderFor(selectedType), text: $note, axis: .vertical)
-                    .lineLimit(3...)
-                    .font(.system(size: 14, design: .rounded))
-                    .foregroundStyle(Theme.textPrimary)
-                    .textInputAutocapitalization(.sentences)
-                    .focused($focused)
-                    .padding(12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Theme.surfaceElevated)
-                    )
+            noteField
 
-                Button("Save treatment") { save(type: selectedType) }
-                    .buttonStyle(NAPrimaryButtonStyle(tint: Theme.treatment, edge: Theme.treatment.opacity(0.55)))
-                    .disabled(FormSupport.clean(note) == nil)
-                    .opacity(FormSupport.clean(note) == nil ? 0.5 : 1)
-            }
+            Button("Save treatment") { save() }
+                .buttonStyle(NAPrimaryButtonStyle(tint: Theme.treatment, edge: Theme.treatment.opacity(0.55)))
+                .disabled(!canSave)
+                .opacity(canSave ? 1 : 0.5)
         }
-        .padding(18)
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(cardBackground)
-        .onChange(of: selectedType) { _, newValue in
-            if newValue != nil { focused = true }
-        }
     }
 
     private func typeChip(_ type: TreatmentType) -> some View {
         let selected = selectedType == type
-        return Button {
-            withAnimation(.spring(duration: 0.25, bounce: 0.3)) {
-                selectedType = type
-            }
-        } label: {
+        return Button { selectedType = type } label: {
             Text(type.rawValue)
-                .font(.system(size: 12.5, weight: .bold, design: .rounded))
-                .foregroundStyle(selected ? Theme.onAccent : Theme.textSecondary)
-                .padding(.horizontal, 13)
-                .padding(.vertical, 8)
+                .font(.system(size: 11.5, weight: .bold, design: .rounded))
+                .foregroundStyle(selected ? Color.white : Theme.textSecondary)
+                .padding(.horizontal, 11)
+                .padding(.vertical, 6)
                 .background(
-                    Capsule(style: .continuous)
-                        .fill(selected ? Theme.treatment : Theme.surfaceElevated)
+                    Capsule().fill(selected ? Theme.treatment : Color.clear)
+                )
+                .overlay(
+                    Capsule().strokeBorder(selected ? .clear : Theme.stroke, lineWidth: 1.5)
                 )
         }
         .buttonStyle(NAPressableButtonStyle())
     }
 
-    private func promptFor(_ type: TreatmentType) -> String {
-        switch type {
-        case .phlebotomy: "How much was drawn? Any notes about how it went?"
-        case .medication: "What med, what dose, and anything worth remembering?"
-        case .ventilation: "How did the session go?"
-        case .erVisit: "What sent you in, and what happened?"
-        case .hospitalization: "Reason for admission, and anything to remember."
-        case .custom: "Anything to record about it?"
+    @ViewBuilder
+    private var typeSpecificFields: some View {
+        switch selectedType {
+        case .medication:
+            VStack(alignment: .leading, spacing: 10) {
+                sectionLabel("MEDICATION — DETAILS")
+                inputRow(placeholder: "Sildenafil", text: $medName, hint: "name")
+                HStack(spacing: 10) {
+                    inputRow(placeholder: "20 mg", text: $medDose, hint: "dose")
+                    datePillRow(date: $medTime, hint: "time")
+                }
+            }
+        case .phlebotomy:
+            VStack(alignment: .leading, spacing: 10) {
+                sectionLabel("PHLEBOTOMY — DETAILS")
+                inputRow(placeholder: "400 ml drawn", text: $phlebotomyVolume, hint: "volume removed")
+                HStack(spacing: 10) {
+                    inputRow(placeholder: "65", text: $phlebotomyHctBefore, hint: "Hct before %")
+                        .keyboardType(.decimalPad)
+                    inputRow(placeholder: "61", text: $phlebotomyHctAfter, hint: "Hct after %")
+                        .keyboardType(.decimalPad)
+                }
+            }
+        case .ventilation:
+            Text("Tap the Ventilation chip in the log picker for the before/after flow.")
+                .font(.system(size: 12, design: .rounded))
+                .foregroundStyle(Theme.textSecondary)
+                .padding(.vertical, 4)
+        case .erVisit:
+            VStack(alignment: .leading, spacing: 10) {
+                sectionLabel("ER VISIT — DETAILS")
+                inputRow(placeholder: "Chest pain, shortness of breath", text: $erReason, hint: "reason for visit")
+                inputRow(placeholder: "Sent home after workup", text: $erOutcome, hint: "outcome")
+            }
+        case .hospitalization:
+            VStack(alignment: .leading, spacing: 10) {
+                sectionLabel("HOSPITALIZATION — DETAILS")
+                inputRow(placeholder: "Pneumonia, IV antibiotics", text: $hospReason, hint: "reason")
+                datePillRow(date: $hospAdmit, hint: "admit date", style: .date)
+                Toggle("Include discharge date", isOn: $hospHasDischarge)
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Theme.textSecondary)
+                    .tint(Theme.treatment)
+                if hospHasDischarge {
+                    datePillRow(date: $hospDischarge, hint: "discharge date", style: .date)
+                }
+            }
+        case .custom:
+            EmptyView()
         }
     }
 
-    private func placeholderFor(_ type: TreatmentType) -> String {
-        switch type {
-        case .phlebotomy: "e.g. 400ml drawn, felt fine after"
-        case .medication: "e.g. Sildenafil 20mg, morning dose"
-        case .ventilation: "e.g. 20 min session, 74% → 81%"
-        case .erVisit: "e.g. Chest pain, sent home after workup"
-        case .hospitalization: "e.g. Admitted for IV antibiotics, 3 nights"
-        case .custom: "Describe it in your own words"
+    private var noteField: some View {
+        TextField("Note (optional)…", text: $note, axis: .vertical)
+            .lineLimit(2...)
+            .font(.system(size: 13, design: .rounded))
+            .foregroundStyle(Theme.textPrimary)
+            .textInputAutocapitalization(.sentences)
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Theme.surfaceInput)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder(Theme.stroke, lineWidth: 1)
+                    )
+            )
+    }
+
+    private func inputRow(placeholder: String, text: Binding<String>, hint: String) -> some View {
+        HStack {
+            TextField(placeholder, text: text)
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .foregroundStyle(Theme.textPrimary)
+                .textInputAutocapitalization(.sentences)
+            Spacer(minLength: 8)
+            Text(hint)
+                .font(.system(size: 11, design: .rounded))
+                .foregroundStyle(Theme.textTertiary)
+        }
+        .padding(.horizontal, 13)
+        .padding(.vertical, 11)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Theme.surfaceInput)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(Theme.stroke, lineWidth: 1)
+                )
+        )
+    }
+
+    private func datePillRow(date: Binding<Date>, hint: String, style: DatePickerComponents = .hourAndMinute) -> some View {
+        HStack {
+            DatePicker("", selection: date, displayedComponents: style)
+                .labelsHidden()
+                .datePickerStyle(.compact)
+                .tint(Theme.treatment)
+            Spacer(minLength: 8)
+            Text(hint)
+                .font(.system(size: 11, design: .rounded))
+                .foregroundStyle(Theme.textTertiary)
+        }
+        .padding(.horizontal, 13)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Theme.surfaceInput)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(Theme.stroke, lineWidth: 1)
+                )
+        )
+    }
+
+    private var canSave: Bool {
+        switch selectedType {
+        case .medication: !medName.trimmingCharacters(in: .whitespaces).isEmpty
+        case .phlebotomy: !phlebotomyVolume.trimmingCharacters(in: .whitespaces).isEmpty
+        case .ventilation: true
+        case .erVisit: !erReason.trimmingCharacters(in: .whitespaces).isEmpty
+        case .hospitalization: !hospReason.trimmingCharacters(in: .whitespaces).isEmpty
+        case .custom: FormSupport.clean(note) != nil
         }
     }
 
-    private func save(type: TreatmentType) {
-        guard let text = FormSupport.clean(note) else { return }
-        let event = TreatmentEvent(timestamp: .now, type: type, note: text)
+    private func save() {
+        var fields: [String: String] = [:]
+        var timestamp: Date = .now
+        var displayName: String
+
+        switch selectedType {
+        case .medication:
+            fields["name"] = FormSupport.clean(medName)
+            fields["dose"] = FormSupport.clean(medDose)
+            fields["time"] = medTime.formatted(date: .omitted, time: .shortened)
+            timestamp = medTime
+            displayName = FormSupport.clean(medName) ?? "Medication"
+        case .phlebotomy:
+            fields["volumeRemoved"] = FormSupport.clean(phlebotomyVolume)
+            fields["hctBefore"] = FormSupport.clean(phlebotomyHctBefore)
+            fields["hctAfter"] = FormSupport.clean(phlebotomyHctAfter)
+            displayName = "Phlebotomy"
+        case .ventilation:
+            displayName = "Ventilation"
+        case .erVisit:
+            fields["reason"] = FormSupport.clean(erReason)
+            fields["outcome"] = FormSupport.clean(erOutcome)
+            displayName = "ER Visit"
+        case .hospitalization:
+            fields["reason"] = FormSupport.clean(hospReason)
+            fields["admittedAt"] = ISO8601DateFormatter().string(from: hospAdmit)
+            if hospHasDischarge {
+                fields["dischargedAt"] = ISO8601DateFormatter().string(from: hospDischarge)
+            }
+            timestamp = hospAdmit
+            displayName = "Hospitalization"
+        case .custom:
+            displayName = "Treatment"
+        }
+
+        let event = TreatmentEvent(
+            timestamp: timestamp,
+            type: selectedType,
+            note: FormSupport.clean(note) ?? "",
+            structuredFields: fields.isEmpty ? nil : fields,
+            source: .manual
+        )
         modelContext.insert(event)
         try? modelContext.save()
-        onSaved(type)
+        onSaved(displayName)
     }
 }
 
-// MARK: - Lab capture (kind chip + value + note)
+// MARK: - Lab (§C5)
 
 private struct LabCaptureCard: View {
     @Environment(\.modelContext) private var modelContext
     let onSaved: (String) -> Void
 
-    @State private var selectedKind: LabKind?
+    @State private var selectedKind: LabKind = .hematocrit
     @State private var customName: String = ""
-    @State private var valueText: String = ""
-    @State private var unit: String = ""
+    @State private var valueText: String = "61.0"
+    @State private var unit: String = "%"
+    @State private var referenceRange: String = "36 – 50"
     @State private var note: String = ""
-    @FocusState private var focus: Field?
 
-    private enum Field: Hashable { case name, value, note }
+    /// Auto-flag when the entered value falls outside a "low – high" range,
+    /// mirroring the "↑ Above your reference range" banner in Screens §C5.
+    private var rangeFlag: String? {
+        guard let value = Double(valueText.replacingOccurrences(of: ",", with: ".")) else { return nil }
+        let parts = referenceRange
+            .replacingOccurrences(of: "–", with: "-")
+            .split(separator: "-")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+        guard parts.count == 2,
+              let low = Double(parts[0]),
+              let high = Double(parts[1]) else { return nil }
+        if value > high { return "↑ Above your reference range" }
+        if value < low { return "↓ Below your reference range" }
+        return nil
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Which lab?")
-                .font(.system(size: 13, weight: .heavy, design: .rounded))
-                .foregroundStyle(Theme.textPrimary)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .bottom, spacing: 8) {
+                OxyMascotView(mood: .calm, size: 28, showGlow: false)
+                Text("Which lab did you get back?")
+                    .font(.system(size: 12.5, design: .rounded))
+                    .foregroundStyle(Theme.textPrimary)
+                    .padding(.horizontal, 13)
+                    .padding(.vertical, 11)
+                    .background(
+                        UnevenRoundedRectangle(
+                            cornerRadii: .init(topLeading: 18, bottomLeading: 6, bottomTrailing: 18, topTrailing: 18),
+                            style: .continuous
+                        ).fill(Theme.surface)
+                    )
+                    .overlay(
+                        UnevenRoundedRectangle(
+                            cornerRadii: .init(topLeading: 18, bottomLeading: 6, bottomTrailing: 18, topTrailing: 18),
+                            style: .continuous
+                        ).strokeBorder(Theme.stroke, lineWidth: 1)
+                    )
+                Spacer(minLength: 0)
+            }
 
-            FlowLayout(spacing: 8) {
+            FlowLayout(spacing: 6) {
                 ForEach(LabKind.allCases) { kind in
                     kindChip(kind)
                 }
             }
 
-            if let selectedKind {
-                Divider()
-                    .overlay(Theme.stroke)
-
-                if selectedKind == .custom {
-                    labeledField("Lab name") {
-                        TextField("e.g. Ferritin", text: $customName)
-                            .textInputAutocapitalization(.words)
-                            .focused($focus, equals: .name)
-                    }
+            if selectedKind == .custom {
+                labeled("Lab name") {
+                    TextField("e.g. Ferritin", text: $customName)
+                        .textInputAutocapitalization(.words)
                 }
-
-                HStack(spacing: 10) {
-                    labeledField("Value") {
-                        TextField("0.0", text: $valueText)
-                            .keyboardType(.decimalPad)
-                            .focused($focus, equals: .value)
-                    }
-
-                    labeledField("Unit") {
-                        TextField(selectedKind.suggestedUnit.isEmpty ? "unit" : selectedKind.suggestedUnit, text: $unit)
-                            .autocorrectionDisabled()
-                            .textInputAutocapitalization(.never)
-                    }
-                    .frame(width: 90)
-                }
-
-                labeledField("Note (optional)") {
-                    TextField("Anything worth remembering", text: $note, axis: .vertical)
-                        .lineLimit(2...)
-                        .textInputAutocapitalization(.sentences)
-                        .focused($focus, equals: .note)
-                }
-
-                Button("Save lab") { save(kind: selectedKind) }
-                    .buttonStyle(NAPrimaryButtonStyle(tint: Theme.lab, edge: Theme.lab.opacity(0.55)))
-                    .disabled(!canSave(for: selectedKind))
-                    .opacity(canSave(for: selectedKind) ? 1 : 0.5)
             }
+
+            HStack(spacing: 10) {
+                VStack(spacing: 4) {
+                    TextField("value", text: $valueText)
+                        .font(.system(size: 26, weight: .heavy, design: .rounded))
+                        .foregroundStyle(Theme.textPrimary)
+                        .keyboardType(.decimalPad)
+                        .multilineTextAlignment(.center)
+                    Text("value")
+                        .font(.system(size: 10, design: .rounded))
+                        .foregroundStyle(Theme.textTertiary)
+                }
+                .padding(13)
+                .frame(maxWidth: .infinity)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Theme.surface)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .strokeBorder(Theme.lab.opacity(0.4), lineWidth: 1)
+                        )
+                )
+                VStack(spacing: 4) {
+                    TextField("unit", text: $unit)
+                        .font(.system(size: 16, weight: .heavy, design: .rounded))
+                        .foregroundStyle(Theme.textPrimary)
+                        .multilineTextAlignment(.center)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                    Text("unit")
+                        .font(.system(size: 10, design: .rounded))
+                        .foregroundStyle(Theme.textTertiary)
+                }
+                .frame(width: 90)
+                .padding(13)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Theme.surfaceInput)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .strokeBorder(Theme.stroke, lineWidth: 1)
+                        )
+                )
+            }
+
+            HStack {
+                TextField("36 – 50", text: $referenceRange)
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .foregroundStyle(Theme.textPrimary)
+                Spacer(minLength: 8)
+                Text("reference range")
+                    .font(.system(size: 11, design: .rounded))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+            .padding(.horizontal, 13)
+            .padding(.vertical, 11)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Theme.surfaceInput)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder(Theme.stroke, lineWidth: 1)
+                    )
+            )
+
+            if let rangeFlag {
+                HStack(spacing: 8) {
+                    Text(rangeFlag)
+                        .font(.system(size: 11.5, design: .rounded))
+                        .foregroundStyle(Color(uiColor: .init(red: 0.76, green: 0.68, blue: 0.96, alpha: 1)))
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 9)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Theme.lab.opacity(0.12))
+                )
+            }
+
+            TextField("Note (optional)…", text: $note, axis: .vertical)
+                .lineLimit(2...)
+                .font(.system(size: 13, design: .rounded))
+                .foregroundStyle(Theme.textPrimary)
+                .textInputAutocapitalization(.sentences)
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Theme.surfaceInput)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .strokeBorder(Theme.stroke, lineWidth: 1)
+                        )
+                )
+
+            Button("Save lab result") { save() }
+                .buttonStyle(NAPrimaryButtonStyle(tint: Theme.lab, edge: Theme.lab.opacity(0.55)))
+                .disabled(!canSave)
+                .opacity(canSave ? 1 : 0.5)
         }
-        .padding(18)
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(cardBackground)
-        .onChange(of: selectedKind) { _, newValue in
-            if let newValue {
-                unit = newValue.suggestedUnit
-                focus = newValue == .custom ? .name : .value
-            }
+        .onChange(of: selectedKind) { _, new in
+            unit = new.suggestedUnit.isEmpty ? unit : new.suggestedUnit
         }
     }
 
     private func kindChip(_ kind: LabKind) -> some View {
         let selected = selectedKind == kind
-        return Button {
-            withAnimation(.spring(duration: 0.25, bounce: 0.3)) {
-                selectedKind = kind
-            }
-        } label: {
+        return Button { selectedKind = kind } label: {
             Text(kind.rawValue)
-                .font(.system(size: 12.5, weight: .bold, design: .rounded))
-                .foregroundStyle(selected ? Theme.onAccent : Theme.textSecondary)
-                .padding(.horizontal, 13)
-                .padding(.vertical, 8)
+                .font(.system(size: 11.5, weight: .bold, design: .rounded))
+                .foregroundStyle(selected ? Color.white : Theme.textSecondary)
+                .padding(.horizontal, 11)
+                .padding(.vertical, 6)
                 .background(
-                    Capsule(style: .continuous)
-                        .fill(selected ? Theme.lab : Theme.surfaceElevated)
+                    Capsule().fill(selected ? Theme.lab : Color.clear)
+                )
+                .overlay(
+                    Capsule().strokeBorder(selected ? .clear : Theme.stroke, lineWidth: 1.5)
                 )
         }
         .buttonStyle(NAPressableButtonStyle())
     }
 
-    private func canSave(for kind: LabKind) -> Bool {
+    @ViewBuilder
+    private func labeled<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label)
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .foregroundStyle(Theme.textSecondary)
+                .textCase(.uppercase)
+            content()
+                .font(.system(size: 14, design: .rounded))
+                .foregroundStyle(Theme.textPrimary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Theme.surfaceInput)
+                )
+        }
+    }
+
+    private var canSave: Bool {
         guard Double(valueText.replacingOccurrences(of: ",", with: ".")) != nil else { return false }
-        if kind == .custom, FormSupport.clean(customName) == nil { return false }
+        if selectedKind == .custom, FormSupport.clean(customName) == nil { return false }
         return true
     }
 
-    private func save(kind: LabKind) {
+    private func save() {
         guard let value = Double(valueText.replacingOccurrences(of: ",", with: ".")) else { return }
-        let name = kind == .custom
-            ? (FormSupport.clean(customName) ?? kind.rawValue)
-            : kind.rawValue
+        let name = selectedKind == .custom
+            ? (FormSupport.clean(customName) ?? selectedKind.rawValue)
+            : selectedKind.rawValue
         let lab = LabResultRecord(
             labName: name,
             value: value,
-            unit: FormSupport.clean(unit) ?? kind.suggestedUnit,
-            referenceRange: nil,
+            unit: FormSupport.clean(unit) ?? selectedKind.suggestedUnit,
+            referenceRange: FormSupport.clean(referenceRange),
             timestamp: .now,
             note: FormSupport.clean(note)
         )
@@ -711,101 +1155,7 @@ private struct LabCaptureCard: View {
     }
 }
 
-// MARK: - Ventilation capture (chat-guided before/after)
-
-private struct VentilationCaptureCard: View {
-    @Environment(\.modelContext) private var modelContext
-    let onSaved: () -> Void
-
-    @State private var initialSpo2: String = ""
-    @State private var initialPulse: String = ""
-    @State private var finalSpo2: String = ""
-    @State private var finalPulse: String = ""
-    @State private var reason: String = ""
-    @State private var note: String = ""
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("How was the session?")
-                .font(.system(size: 13, weight: .heavy, design: .rounded))
-                .foregroundStyle(Theme.textPrimary)
-            Text("Fill what you have — nothing is required.")
-                .font(.system(size: 11, design: .rounded))
-                .foregroundStyle(Theme.textTertiary)
-
-            beforeAfterRow(title: "SpO2 before → after", left: $initialSpo2, right: $finalSpo2, unit: "%")
-            beforeAfterRow(title: "Pulse before → after", left: $initialPulse, right: $finalPulse, unit: "bpm")
-
-            labeledField("Reason (optional)") {
-                TextField("e.g. before bed", text: $reason)
-                    .textInputAutocapitalization(.sentences)
-            }
-
-            labeledField("Note (optional)") {
-                TextField("How it went, anything to remember", text: $note, axis: .vertical)
-                    .lineLimit(2...)
-                    .textInputAutocapitalization(.sentences)
-            }
-
-            Button("Save session") { save() }
-                .buttonStyle(NAPrimaryButtonStyle(tint: Theme.ventilation, edge: Theme.ventilation.opacity(0.55)))
-        }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(cardBackground)
-    }
-
-    private func beforeAfterRow(title: String, left: Binding<String>, right: Binding<String>, unit: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                .foregroundStyle(Theme.textSecondary)
-                .textCase(.uppercase)
-
-            HStack(spacing: 10) {
-                numericField(text: left, placeholder: "before")
-                Image(systemName: "arrow.right")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(Theme.textTertiary)
-                numericField(text: right, placeholder: "after")
-                Text(unit)
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundStyle(Theme.textTertiary)
-            }
-        }
-    }
-
-    private func numericField(text: Binding<String>, placeholder: String) -> some View {
-        TextField(placeholder, text: text)
-            .keyboardType(.numberPad)
-            .font(.system(size: 15, weight: .bold, design: .rounded))
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Theme.surfaceElevated)
-            )
-            .frame(maxWidth: 90)
-    }
-
-    private func save() {
-        let session = VentilationSession(
-            startTime: .now,
-            endTime: .now,
-            initialSaturation: Int(initialSpo2),
-            initialPulse: Int(initialPulse),
-            finalSaturation: Int(finalSpo2),
-            finalPulse: Int(finalPulse),
-            reason: FormSupport.clean(reason),
-            note: FormSupport.clean(note)
-        )
-        modelContext.insert(session)
-        try? modelContext.save()
-        onSaved()
-    }
-}
-
-// MARK: - Journal capture (Something else)
+// MARK: - Journal (§C6)
 
 private struct JournalCaptureCard: View {
     @Environment(\.modelContext) private var modelContext
@@ -816,54 +1166,295 @@ private struct JournalCaptureCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Tell me what happened.")
-                .font(.system(size: 13, weight: .heavy, design: .rounded))
-                .foregroundStyle(Theme.textPrimary)
-
-            Text("Anything numbers won't catch — how a flare felt, what a doctor said, why a reading looked off. Oxy will remember this next time and it'll feed into reports.")
-                .font(.system(size: 11.5, design: .rounded))
-                .foregroundStyle(Theme.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
+            HStack(alignment: .bottom, spacing: 8) {
+                OxyMascotView(mood: .calm, size: 30, showGlow: false)
+                Text("How are you feeling today? Tell me anything — no wrong answers.")
+                    .font(.system(size: 12.5, design: .rounded))
+                    .foregroundStyle(Theme.textPrimary)
+                    .padding(.horizontal, 13)
+                    .padding(.vertical, 11)
+                    .background(
+                        UnevenRoundedRectangle(
+                            cornerRadii: .init(topLeading: 18, bottomLeading: 6, bottomTrailing: 18, topTrailing: 18),
+                            style: .continuous
+                        ).fill(Theme.surface)
+                    )
+                    .overlay(
+                        UnevenRoundedRectangle(
+                            cornerRadii: .init(topLeading: 18, bottomLeading: 6, bottomTrailing: 18, topTrailing: 18),
+                            style: .continuous
+                        ).strokeBorder(Theme.stroke, lineWidth: 1)
+                    )
+                    .frame(maxWidth: 240, alignment: .leading)
+                Spacer(minLength: 0)
+            }
 
             TextField(
-                "e.g. Woke up short of breath around 3am, better after sitting up",
+                "Felt more winded than usual on the walk to the pharmacy. Rested and it passed.",
                 text: $text,
                 axis: .vertical
             )
-            .lineLimit(4...)
-            .font(.system(size: 14, design: .rounded))
+            .lineLimit(5...)
+            .font(.system(size: 13, design: .rounded))
             .foregroundStyle(Theme.textPrimary)
             .textInputAutocapitalization(.sentences)
             .focused($focused)
-            .padding(12)
+            .padding(14)
+            .frame(maxWidth: .infinity, minHeight: 140, alignment: .topLeading)
             .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Theme.surfaceElevated)
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Theme.surfaceInput)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .strokeBorder(Theme.stroke, lineWidth: 1)
+                    )
             )
 
-            Button("Save note") { save() }
+            Button("Save entry") { save() }
                 .buttonStyle(NAPrimaryButtonStyle())
                 .disabled(FormSupport.clean(text) == nil)
                 .opacity(FormSupport.clean(text) == nil ? 0.5 : 1)
         }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(cardBackground)
         .onAppear { focused = true }
     }
 
     private func save() {
         guard let cleaned = FormSupport.clean(text) else { return }
-        let entry = JournalEntry(timestamp: .now, text: cleaned)
-        modelContext.insert(entry)
+        modelContext.insert(JournalEntry(timestamp: .now, text: cleaned))
         try? modelContext.save()
         onSaved()
     }
 }
 
-// MARK: - Shared bits
+// MARK: - Water (§C7)
 
-/// Card chrome shared across every mode's surface.
+private struct WaterCaptureCard: View {
+    @Environment(\.modelContext) private var modelContext
+    @Query private var hydrationLogs: [HydrationLog]
+
+    let preferences: UserPreferences
+    /// Called with the new ml total after each save.
+    let onLog: (Int) -> Void
+
+    private var todayLog: HydrationLog? {
+        let start = Calendar.current.startOfDay(for: .now)
+        return hydrationLogs.first { $0.day == start }
+    }
+
+    private var currentMl: Int { todayLog?.ml ?? 0 }
+    private var target: Int { todayLog?.targetMl ?? preferences.targetMl }
+    private var progress: Double { min(1, Double(currentMl) / Double(max(1, target))) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .bottom, spacing: 8) {
+                OxyMascotView(mood: .calm, size: 30, showGlow: false)
+                Text("Had some water? Add what you drank.")
+                    .font(.system(size: 12.5, design: .rounded))
+                    .foregroundStyle(Theme.textPrimary)
+                    .padding(.horizontal, 13)
+                    .padding(.vertical, 11)
+                    .background(
+                        UnevenRoundedRectangle(
+                            cornerRadii: .init(topLeading: 18, bottomLeading: 6, bottomTrailing: 18, topTrailing: 18),
+                            style: .continuous
+                        ).fill(Theme.surface)
+                    )
+                    .overlay(
+                        UnevenRoundedRectangle(
+                            cornerRadii: .init(topLeading: 18, bottomLeading: 6, bottomTrailing: 18, topTrailing: 18),
+                            style: .continuous
+                        ).strokeBorder(Theme.stroke, lineWidth: 1)
+                    )
+                Spacer(minLength: 0)
+            }
+
+            VStack(spacing: 14) {
+                Text("Today")
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .foregroundStyle(Theme.textTertiary)
+
+                HStack(alignment: .lastTextBaseline, spacing: 4) {
+                    Text("\(displayValue(currentMl))")
+                        .font(.system(size: 44, weight: .heavy, design: .rounded))
+                        .foregroundStyle(Theme.accent)
+                        .contentTransition(.numericText())
+                    Text("/ \(displayValue(target)) \(preferences.hydrationUnit.shortLabel)")
+                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .foregroundStyle(Theme.textSecondary)
+                }
+
+                ProgressBar(progress: progress)
+                    .frame(height: 10)
+
+                Text("Daily target set with your care team — fluid-aware for cardiac care")
+                    .font(.system(size: 10.5, design: .rounded))
+                    .foregroundStyle(Theme.textTertiary)
+                    .multilineTextAlignment(.center)
+
+                HStack(spacing: 12) {
+                    circleStepper(symbol: "minus") { add(-preferences.hydrationUnit.incrementStepMl) }
+                    Button {
+                        add(preferences.hydrationUnit.incrementStepMl)
+                    } label: {
+                        Text("+ \(displayValue(preferences.hydrationUnit.incrementStepMl)) \(preferences.hydrationUnit.shortLabel)")
+                            .font(.system(size: 14, weight: .heavy, design: .rounded))
+                            .foregroundStyle(Theme.onAccent)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(Theme.accent)
+                            )
+                            .shadow(color: Theme.accentEdge, radius: 0, x: 0, y: 4)
+                    }
+                    .buttonStyle(NAPressableButtonStyle())
+                    circleStepper(symbol: "plus") { add(preferences.hydrationUnit.incrementStepMl) }
+                }
+                .padding(.top, 2)
+            }
+            .padding(20)
+            .frame(maxWidth: .infinity)
+            .background(cardBackground)
+        }
+    }
+
+    private func displayValue(_ ml: Int) -> String {
+        switch preferences.hydrationUnit {
+        case .ml: "\(ml)"
+        case .cup: String(format: "%.1f", Double(ml) / Double(HydrationLog.mlPerCup))
+        }
+    }
+
+    private func circleStepper(symbol: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 20, weight: .heavy))
+                .foregroundStyle(Theme.textPrimary)
+                .frame(width: 52, height: 52)
+                .background(
+                    Circle().fill(Theme.surfaceElevated)
+                )
+        }
+        .buttonStyle(NAPressableButtonStyle())
+    }
+
+    private func add(_ deltaMl: Int) {
+        let start = Calendar.current.startOfDay(for: .now)
+        if let existing = todayLog {
+            if deltaMl >= 0 {
+                existing.addMl(deltaMl)
+            } else {
+                existing.subtractMl(-deltaMl)
+            }
+        } else if deltaMl > 0 {
+            let log = HydrationLog(day: start, ml: deltaMl, targetMl: preferences.targetMl)
+            modelContext.insert(log)
+        }
+        try? modelContext.save()
+        onLog(todayLog?.ml ?? deltaMl)
+    }
+}
+
+private struct ProgressBar: View {
+    let progress: Double
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(Theme.surfaceElevated)
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(Theme.accent)
+                    .frame(width: proxy.size.width * CGFloat(progress))
+            }
+        }
+    }
+}
+
+// MARK: - IMT (§C9) — launch card, actual session lives in IMTSessionView
+
+private struct IMTLaunchCard: View {
+    let onStart: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .bottom, spacing: 8) {
+                OxyMascotView(mood: .calm, size: 30, showGlow: false)
+                Text("Ready for a set? 30 breaths, 3 sets, I'll pace you.")
+                    .font(.system(size: 12.5, design: .rounded))
+                    .foregroundStyle(Theme.textPrimary)
+                    .padding(.horizontal, 13)
+                    .padding(.vertical, 11)
+                    .background(
+                        UnevenRoundedRectangle(
+                            cornerRadii: .init(topLeading: 18, bottomLeading: 6, bottomTrailing: 18, topTrailing: 18),
+                            style: .continuous
+                        ).fill(Theme.surface)
+                    )
+                    .overlay(
+                        UnevenRoundedRectangle(
+                            cornerRadii: .init(topLeading: 18, bottomLeading: 6, bottomTrailing: 18, topTrailing: 18),
+                            style: .continuous
+                        ).strokeBorder(Theme.stroke, lineWidth: 1)
+                    )
+                Spacer(minLength: 0)
+            }
+
+            Button("Start breathing") { onStart() }
+                .buttonStyle(NAPrimaryButtonStyle())
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(cardBackground)
+    }
+}
+
+// MARK: - Custom SpO2 slider (also used for HR)
+
+/// 6pt track, 20pt round knob with 3pt background-color border per screen 9.
+/// Range-agnostic — reused by SpO2 and HR captures.
+struct SpO2SliderTrack: View {
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+
+    var body: some View {
+        GeometryReader { proxy in
+            let width = proxy.size.width
+            let knobSize: CGFloat = 20
+            let usableWidth = width - knobSize
+            let progress = CGFloat((value - range.lowerBound) / (range.upperBound - range.lowerBound))
+            let knobX = usableWidth * progress + knobSize / 2
+
+            ZStack(alignment: .leading) {
+                Capsule().fill(Theme.surfaceElevated).frame(height: 6)
+                Capsule().fill(Theme.accent).frame(width: max(0, knobX), height: 6)
+                Circle()
+                    .fill(Theme.accent)
+                    .overlay(Circle().strokeBorder(Theme.background, lineWidth: 3))
+                    .frame(width: knobSize, height: knobSize)
+                    .offset(x: knobX - knobSize / 2)
+            }
+            .frame(height: 20)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { gesture in
+                        let raw = (gesture.location.x - knobSize / 2) / usableWidth
+                        let clamped = max(0, min(1, Double(raw)))
+                        let newValue = range.lowerBound + clamped * (range.upperBound - range.lowerBound)
+                        let stepped = newValue.rounded()
+                        if stepped != value { value = stepped }
+                    }
+            )
+        }
+    }
+}
+
+// MARK: - Shared helpers
+
+/// Card chrome shared across every mode's surface — 22pt radius,
+/// surface fill, 1pt stroke.
 private var cardBackground: some View {
     RoundedRectangle(cornerRadius: 22, style: .continuous)
         .fill(Theme.surface)
@@ -873,31 +1464,18 @@ private var cardBackground: some View {
         )
 }
 
-/// Labeled text-input wrapper used across Lab, Ventilation, and Journal
-/// modes. Small caps label above, styled TextField below.
-@ViewBuilder
-private func labeledField<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
-    VStack(alignment: .leading, spacing: 6) {
-        Text(label)
-            .font(.system(size: 11, weight: .semibold, design: .rounded))
-            .foregroundStyle(Theme.textSecondary)
-            .textCase(.uppercase)
-        content()
-            .font(.system(size: 14, design: .rounded))
-            .foregroundStyle(Theme.textPrimary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Theme.surfaceElevated)
-            )
-    }
+private func sectionLabel(_ text: String) -> some View {
+    Text(text)
+        .font(.system(size: 11, weight: .heavy, design: .rounded))
+        .foregroundStyle(Theme.textTertiary)
+        .textCase(.uppercase)
+        .tracking(0.4)
 }
 
 // MARK: - Flow layout for chip row
 
 /// Simple flow layout — wraps children onto new lines when they overflow the
-/// available width. Matches the CSS `flex-wrap: wrap` in screen 8.
+/// available width. Matches `flex-wrap: wrap` in screen 8.
 struct FlowLayout: Layout {
     var spacing: CGFloat = 8
 
