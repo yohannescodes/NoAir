@@ -148,23 +148,35 @@ struct HomeView: View {
 
     // MARK: - Sections
 
+    /// Two-row header. Squeezing greeting + four affordances into one
+    /// row wrapped mid-word ("Yohanne · s") on longer names, so:
+    ///   row 1 — greeting alone, no wrap, gets the whole width
+    ///   row 2 — coin + streak pills (left) · refresh + gear (right)
+    /// This scales cleanly to any name length and keeps every affordance
+    /// at a full tap target instead of shrinking to fit.
     private var header: some View {
-        HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 12) {
             Text(greeting)
                 .font(.system(size: 24, weight: .heavy, design: .rounded))
                 .foregroundStyle(Theme.textPrimary)
-            Spacer()
-            oxypointsPill
-            streakPill
-            refreshHeaderButton
-            Button(action: onOpenSettings) {
-                Image(systemName: "gearshape")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(Theme.textTertiary)
-                    .frame(width: 32, height: 32)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            HStack(spacing: 8) {
+                oxypointsPill
+                streakPill
+                Spacer(minLength: 8)
+                refreshHeaderButton
+                Button(action: onOpenSettings) {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(Theme.textTertiary)
+                        .frame(width: 32, height: 32)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Settings")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Settings")
         }
     }
 
