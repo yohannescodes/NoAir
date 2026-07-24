@@ -25,7 +25,10 @@ struct SettingsView: View {
     private let reminderService = ReadingReminderService()
 
     var body: some View {
-        NavigationStack {
+        NABrandNavBar(
+            title: "Settings",
+            trailing: .quiet("Done") { dismiss() }
+        ) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     profileCard
@@ -38,29 +41,20 @@ struct SettingsView: View {
                 .padding(.horizontal, 18)
                 .padding(.vertical, 16)
             }
-            .background(Theme.background.ignoresSafeArea())
-            .navigationTitle("Settings")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
-                        .foregroundStyle(Theme.accent)
-                }
-            }
-            .sheet(isPresented: $showsBaselineEditor) {
-                BaselineEditorSheet(preferences: preferences)
-                    .presentationDetents([.medium])
-            }
-            .sheet(isPresented: $showsDisclaimer) {
-                DisclaimerDetailSheet()
-                    .presentationDetents([.medium, .large])
-            }
-            .sheet(isPresented: $showsNotificationPreAsk) {
-                NotificationPreAskSheet(onEnable: {
-                    Task { await enableReminders() }
-                })
+        }
+        .sheet(isPresented: $showsBaselineEditor) {
+            BaselineEditorSheet(preferences: preferences)
                 .presentationDetents([.medium])
-            }
+        }
+        .sheet(isPresented: $showsDisclaimer) {
+            DisclaimerDetailSheet()
+                .presentationDetents([.medium, .large])
+        }
+        .sheet(isPresented: $showsNotificationPreAsk) {
+            NotificationPreAskSheet(onEnable: {
+                Task { await enableReminders() }
+            })
+            .presentationDetents([.medium])
         }
     }
 
@@ -356,7 +350,10 @@ private struct BaselineEditorSheet: View {
     @State private var draft: Double = 78
 
     var body: some View {
-        NavigationStack {
+        NABrandNavBar(
+            title: "Your baseline",
+            leading: .cancel { dismiss() }
+        ) {
             VStack(alignment: .leading, spacing: 18) {
                 HStack(alignment: .bottom, spacing: 8) {
                     OxyMascotView(mood: .calm, size: 30, showGlow: false)
@@ -412,15 +409,6 @@ private struct BaselineEditorSheet: View {
                 Spacer()
             }
             .padding(18)
-            .background(Theme.background.ignoresSafeArea())
-            .navigationTitle("Your baseline")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                        .foregroundStyle(Theme.textSecondary)
-                }
-            }
         }
         .onAppear { draft = Double(preferences.baselineSpo2) }
     }
@@ -432,7 +420,10 @@ private struct DisclaimerDetailSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        NavigationStack {
+        NABrandNavBar(
+            title: "Safety disclaimer",
+            trailing: .quiet("Done") { dismiss() }
+        ) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     VStack(alignment: .leading, spacing: 10) {
@@ -481,15 +472,6 @@ private struct DisclaimerDetailSheet: View {
                     Spacer()
                 }
                 .padding(18)
-            }
-            .background(Theme.background.ignoresSafeArea())
-            .navigationTitle("Safety disclaimer")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                        .foregroundStyle(Theme.accent)
-                }
             }
         }
     }

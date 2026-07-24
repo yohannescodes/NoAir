@@ -21,7 +21,11 @@ struct JournalEntryEditorSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NABrandNavBar(
+            title: "Edit Note",
+            leading: .cancel { dismiss() },
+            trailing: .primary("Save", enabled: FormSupport.clean(text) != nil, action: save)
+        ) {
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.xl) {
                     NACard(title: "Note", systemImage: "note.text") {
@@ -43,19 +47,7 @@ struct JournalEntryEditorSheet: View {
                 }
                 .padding()
             }
-            .background(Theme.background)
             .scrollDismissesKeyboard(.interactively)
-            .navigationTitle("Edit Note")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", action: dismiss.callAsFunction)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save", action: save)
-                        .disabled(FormSupport.clean(text) == nil)
-                }
-            }
         }
         .presentationDragIndicator(.visible)
         .presentationBackground(Theme.background)

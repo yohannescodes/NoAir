@@ -25,30 +25,39 @@ struct OxyClosetView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NABrandNavBar(
+            title: "Oxy's closet",
+            leading: .cancel { dismiss() }
+        ) {
             VStack(spacing: 0) {
+                oxypointsBanner
                 previewCard
                 axisPicker
                 itemGrid
             }
-            .background(Theme.background.ignoresSafeArea())
-            .navigationTitle("Oxy's closet")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Done") { dismiss() }
-                        .foregroundStyle(Theme.accent)
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    HStack(spacing: 5) {
-                        Text("🪙").font(.system(size: 14))
-                        Text("\(oxypoints)")
-                            .font(.system(size: 14, weight: .heavy, design: .rounded))
-                            .foregroundStyle(Theme.accent)
-                    }
-                }
-            }
         }
+    }
+
+    /// Non-actionable status indicator moved out of the nav bar into a
+    /// row of its own — the Oxy nav-bar primitive is for actions, not
+    /// live counters.
+    private var oxypointsBanner: some View {
+        HStack(spacing: 6) {
+            Text("🪙").font(.system(size: 15))
+            Text("\(oxypoints)")
+                .font(.system(size: 14, weight: .heavy, design: .rounded))
+                .foregroundStyle(Theme.accent)
+                .contentTransition(.numericText())
+            Text("Oxypoints available")
+                .font(.system(size: 11.5, design: .rounded))
+                .foregroundStyle(Theme.textSecondary)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 10)
+        .background(
+            Rectangle().fill(Theme.accent.opacity(0.06))
+        )
     }
 
     // MARK: - Preview
