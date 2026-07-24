@@ -13,7 +13,7 @@ import SwiftData
 /// - Expressions 🪙 250 — happy free/default, cool, sleepy, determined, zen
 /// - Colors 🪙 400 — mint free/default, coral, sky, violet, amber
 /// - Outfits 🪙 500-1500 tiered — scarf 500, beanie 600, shades 700,
-///   doctor coat 900, crown 1500 (aspirational)
+///   headphones 800, doctor coat 900, crown 1500 (aspirational)
 @Model
 final class CosmeticItem {
     var id: UUID
@@ -75,6 +75,7 @@ final class CosmeticItem {
         CosmeticItem(slug: "outfit.scarf", axis: .outfit, displayName: "Scarf", cost: 500),
         CosmeticItem(slug: "outfit.beanie", axis: .outfit, displayName: "Beanie", cost: 600),
         CosmeticItem(slug: "outfit.shades", axis: .outfit, displayName: "Shades", cost: 700),
+        CosmeticItem(slug: "outfit.headphones", axis: .outfit, displayName: "Headphones", cost: 800),
         CosmeticItem(slug: "outfit.coat", axis: .outfit, displayName: "Doctor coat", cost: 900),
         CosmeticItem(slug: "outfit.crown", axis: .outfit, displayName: "Crown", cost: 1500),
     ]

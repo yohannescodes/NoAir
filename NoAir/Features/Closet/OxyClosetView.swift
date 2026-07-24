@@ -201,6 +201,7 @@ struct OxyClosetView: View {
             case "outfit.scarf": "🧣"
             case "outfit.beanie": "🧢"
             case "outfit.shades": "🕶"
+            case "outfit.headphones": "🎧"
             case "outfit.coat": "🥼"
             case "outfit.crown": "👑"
             default: "✨"

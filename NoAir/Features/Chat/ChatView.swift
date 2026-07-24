@@ -370,6 +370,11 @@ struct ChatView: View {
         let userText = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !userText.isEmpty else { return }
 
+        // Send-side feedback fires the moment the tap registers — matches
+        // iMessage timing so the input feels responsive even before the
+        // network turn starts.
+        ChatFeedback.send()
+
         let userMessage = ChatMessage(conversationId: conversationId, role: .user, text: userText)
         modelContext.insert(userMessage)
         draft = ""
@@ -387,11 +392,15 @@ struct ChatView: View {
             let history = messages.filter { $0.id != placeholder.id && $0.state != .failed }
             let reply = try await service.send(history: history, userTurn: userText, context: context)
             await streamIntoBubble(reply, placeholder: placeholder)
+            // Arrival feedback once — not per streamed chunk — so the
+            // haptic doesn't jackhammer during the fake-stream.
+            ChatFeedback.receive()
         } catch {
             placeholder.state = .failed
             placeholder.text = fallbackCopy(for: error)
             try? modelContext.save()
             failureMessage = "Offline or rate-limited — try again in a moment."
+            ChatFeedback.error()
         }
         isGenerating = false
     }
