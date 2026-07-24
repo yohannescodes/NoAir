@@ -35,6 +35,16 @@ struct LoggingStreakService {
         /// Historical rest-day passes already spent. Each entry protects
         /// exactly one day.
         var restDays: Set<Date> = []
+        /// Days (start-of-day, calendar-local) where HealthKit already
+        /// carries at least one blood-oxygen sample. Callers derive this
+        /// from `HealthDataProvider.dailySummaries` — Apple Watch samples
+        /// satisfy the SpO2 condition the same as a manual log per
+        /// Spec v2 §20.
+        var watchSpO2Days: Set<Date> = []
+        /// Same, for heart rate. HR is emitted near-continuously by the
+        /// watch so this typically populates for every day the user wore
+        /// their watch, without them lifting a finger.
+        var watchHRDays: Set<Date> = []
     }
 
     func streak(
@@ -43,6 +53,8 @@ struct LoggingStreakService {
         today: Date = .now
     ) -> Streak {
         let normalizedRestDays = Set(inputs.restDays.map { calendar.startOfDay(for: $0) })
+        let normalizedWatchSpO2 = Set(inputs.watchSpO2Days.map { calendar.startOfDay(for: $0) })
+        let normalizedWatchHR = Set(inputs.watchHRDays.map { calendar.startOfDay(for: $0) })
 
         // Bucket the source rows per calendar day once.
         let readingsByDay = Dictionary(grouping: inputs.readings) { calendar.startOfDay(for: $0.timestamp) }
@@ -54,8 +66,8 @@ struct LoggingStreakService {
             if normalizedRestDays.contains(day) { return true }
             let readings = readingsByDay[day] ?? []
             let treatments = treatmentsByDay[day] ?? []
-            let hasSpO2 = readings.contains { $0.spo2 != nil }
-            let hasHR = readings.contains { $0.pulse != nil }
+            let hasSpO2 = readings.contains { $0.spo2 != nil } || normalizedWatchSpO2.contains(day)
+            let hasHR = readings.contains { $0.pulse != nil } || normalizedWatchHR.contains(day)
             let hasMedication = treatments.contains { $0.type == .medication }
             let waterHit = hydrationByDay[day]?.isTargetMet ?? false
             let medOK = !inputs.takesMedication || hasMedication
@@ -83,6 +95,8 @@ struct LoggingStreakService {
             .union(treatmentsByDay.keys)
             .union(hydrationByDay.keys)
             .union(normalizedRestDays)
+            .union(normalizedWatchSpO2)
+            .union(normalizedWatchHR)
         var best = 0
         var run = 0
         var previous: Date?

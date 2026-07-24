@@ -39,22 +39,23 @@ struct TrendsView: View {
 
                 DisclosureGroup(isExpanded: $showLegacy) {
                     VStack(spacing: 14) {
-                        OvernightChartView(
-                            spo2Points: healthDataProvider.overnightSpO2,
-                            heartRatePoints: overnightHeartRate,
-                            sleep: healthDataProvider.lastNightSleep
-                        )
+                        overnightCard
                         if healthDataProvider.isConnected {
-                            CardiacPanelView()
+                            cardiacCard
                         }
                         recentReadingsCard
                     }
                     .padding(.top, 12)
                 } label: {
-                    Text(showLegacy ? "Hide detail" : "More detail")
-                        .font(Typography.bodyEmphasized)
-                        .foregroundStyle(Theme.accent)
+                    HStack {
+                        Text(showLegacy ? "Hide detail" : "More detail")
+                            .font(.system(size: 12.5, weight: .heavy, design: .rounded))
+                            .foregroundStyle(Theme.accent)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 4)
                 }
+                .accentColor(Theme.accent)
             }
             .padding(.top, 16)
             .padding(.horizontal, 18)
@@ -210,37 +211,146 @@ struct TrendsView: View {
         }
     }
 
-    private var recentReadingsCard: some View {
-        NACard(title: "Recent Readings", systemImage: "clock.fill") {
-            if readings.isEmpty {
-                Text("No readings logged yet.")
-                    .font(Typography.body)
+    // MARK: - Detail cards (v2 chrome)
+
+    /// Overnight snippet — SpO2 samples the watch captured while the user
+    /// was asleep, plus a compact sleep-duration line. Replaces the
+    /// legacy OvernightChartView so the detail view uses the same 22pt
+    /// card + section-label chrome as the rest of Trends.
+    private var overnightCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("OVERNIGHT")
+                .font(.system(size: 11, weight: .heavy, design: .rounded))
+                .foregroundStyle(Theme.textTertiary)
+                .tracking(0.4)
+
+            if healthDataProvider.overnightSpO2.isEmpty && overnightHeartRate.isEmpty {
+                Text("No overnight watch samples yet. Wear your watch to bed to see the shape of your night.")
+                    .font(.system(size: 12, design: .rounded))
                     .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             } else {
-                VStack(alignment: .leading, spacing: 12) {
-                    ForEach(readings.prefix(8), id: \.id) { reading in
-                        let zone = reading.spo2.map { SpO2Zone(spo2: $0) }
-                        HStack(alignment: .firstTextBaseline, spacing: 12) {
-                            Text(reading.spo2.map { "\($0)%" } ?? "HR only")
-                                .font(Typography.metric)
-                                .foregroundStyle(zone?.color ?? Theme.textSecondary)
+                Chart {
+                    ForEach(healthDataProvider.overnightSpO2) { point in
+                        LineMark(
+                            x: .value("Time", point.date),
+                            y: .value("SpO2", point.value),
+                            series: .value("Source", "SpO2")
+                        )
+                        .interpolationMethod(.monotone)
+                        .foregroundStyle(Theme.accent)
+                    }
+                    ForEach(overnightHeartRate) { point in
+                        LineMark(
+                            x: .value("Time", point.date),
+                            y: .value("HR", point.value),
+                            series: .value("Source", "HR")
+                        )
+                        .interpolationMethod(.monotone)
+                        .foregroundStyle(Theme.treatment.opacity(0.7))
+                    }
+                }
+                .chartXAxis(.hidden)
+                .chartYAxis(.hidden)
+                .frame(height: 90)
 
-                            if let pulse = reading.pulse {
-                                Text("\(pulse) bpm")
-                                    .font(Typography.body)
-                                    .foregroundStyle(Theme.textSecondary)
-                            }
-
-                            Spacer()
-
-                            Text(reading.timestamp.formatted(date: .abbreviated, time: .shortened))
-                                .font(Typography.caption)
-                                .foregroundStyle(Theme.textTertiary)
-                        }
+                if let sleep = healthDataProvider.lastNightSleep {
+                    HStack(spacing: 8) {
+                        Text("🌙").font(.system(size: 13))
+                        Text("Slept \(sleep.totalAsleepFormatted)")
+                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .foregroundStyle(Theme.textSecondary)
+                        Spacer(minLength: 0)
                     }
                 }
             }
         }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(cardChrome)
+    }
+
+    /// Cardiac panel — resting HR, HRV, VO2 max, respiratory rate in a
+    /// 2×2 grid using the same metric-tile shape as the primary Trends
+    /// tiles. Replaces the legacy CardiacPanelView.
+    private var cardiacCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("CARDIAC PANEL")
+                .font(.system(size: 11, weight: .heavy, design: .rounded))
+                .foregroundStyle(Theme.textTertiary)
+                .tracking(0.4)
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                metricTile(title: "Resting HR", value: restingHR)
+                metricTile(title: "HRV (SDNN)", value: hrv)
+                metricTile(title: "Respiratory", value: respRate)
+                metricTile(title: "VO₂ Max", value: vo2Max)
+            }
+        }
+    }
+
+    /// Recent readings — inline v2 rows, no more NACard chrome. Same
+    /// styling as the Timeline row so the two feel consistent.
+    private var recentReadingsCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("RECENT READINGS")
+                .font(.system(size: 11, weight: .heavy, design: .rounded))
+                .foregroundStyle(Theme.textTertiary)
+                .tracking(0.4)
+
+            if readings.isEmpty {
+                Text("No readings logged yet.")
+                    .font(.system(size: 12, design: .rounded))
+                    .foregroundStyle(Theme.textSecondary)
+                    .padding(.vertical, 6)
+            } else {
+                VStack(spacing: 8) {
+                    ForEach(readings.prefix(8), id: \.id) { reading in
+                        recentReadingRow(reading)
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(cardChrome)
+    }
+
+    private func recentReadingRow(_ reading: ReadingRecord) -> some View {
+        let zone = reading.spo2.map { SpO2Zone(spo2: $0) }
+        return HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(reading.spo2.map { "\($0)%" } ?? "HR only")
+                .font(.system(size: 16, weight: .heavy, design: .rounded))
+                .foregroundStyle(zone?.color ?? Theme.textSecondary)
+            if let pulse = reading.pulse {
+                Text("\(pulse) bpm")
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Theme.textSecondary)
+            }
+            Spacer(minLength: 8)
+            Text(reading.timestamp.formatted(date: .abbreviated, time: .shortened))
+                .font(.system(size: 10.5, design: .rounded))
+                .foregroundStyle(Theme.textTertiary)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Theme.surfaceElevated)
+        )
+    }
+
+    private var vo2Max: String {
+        healthDataProvider.vo2Max.map { String(format: "%.1f", $0.value) + " mL/kg·min" } ?? "—"
+    }
+
+    /// v2 card chrome — same 22pt-radius surface as the primary tiles.
+    private var cardChrome: some View {
+        RoundedRectangle(cornerRadius: 22, style: .continuous)
+            .fill(Theme.surface)
+            .overlay(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .strokeBorder(Theme.stroke, lineWidth: 1)
+            )
     }
 
     // MARK: - Data

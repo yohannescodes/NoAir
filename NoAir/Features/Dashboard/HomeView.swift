@@ -37,6 +37,13 @@ struct HomeView: View {
     @State private var celebratedQuestKey: String?
     @State private var isRefreshingContext = false
     @State private var liveContext: ReadingEnrichment?
+    /// Days (calendar-local, start-of-day) HealthKit has an SpO2 sample for.
+    /// Populated by a background dailySummaries fetch — feeds
+    /// LoggingStreakService.Inputs so watch-only days count toward the
+    /// streak.
+    @State private var watchSpO2Days: Set<Date> = []
+    /// Same, for heart rate.
+    @State private var watchHRDays: Set<Date> = []
 
     var body: some View {
         ScrollView {
@@ -110,7 +117,27 @@ struct HomeView: View {
                 await refreshContext()
             }
             evaluateAllDoneCelebration()
+            await refreshWatchStreakDays()
         }
+    }
+
+    /// Pull the last 30 days of HK daily vitals summaries and build the
+    /// per-day sets the streak service needs. Done off-main because
+    /// `dailySummaries` spawns HK queries per day. Only runs when Health
+    /// is connected — nothing to fetch otherwise.
+    private func refreshWatchStreakDays() async {
+        guard healthDataProvider.isConnected else { return }
+        let summaries = await healthDataProvider.dailySummaries(days: 30)
+        let calendar = Calendar.current
+        var spo2: Set<Date> = []
+        var hr: Set<Date> = []
+        for summary in summaries {
+            let day = calendar.startOfDay(for: summary.day)
+            if summary.spo2SampleCount > 0 { spo2.insert(day) }
+            if summary.heartRateMin != nil { hr.insert(day) }
+        }
+        watchSpO2Days = spo2
+        watchHRDays = hr
     }
 
     // MARK: - Sections
@@ -580,12 +607,22 @@ struct HomeView: View {
 
     private var hydrationMlToday: Int { hydrationLogToday?.ml ?? 0 }
 
+    /// SpO2 is "done" if the user has a manual reading OR HealthKit has an
+    /// Apple Watch sample for today. Spec v2 §20 explicitly says watch
+    /// readings count the same as manual entries.
     private var spo2LoggedToday: Bool {
-        readings.contains { Calendar.current.isDateInToday($0.timestamp) && $0.spo2 != nil }
+        let manual = readings.contains { Calendar.current.isDateInToday($0.timestamp) && $0.spo2 != nil }
+        let watch = (healthDataProvider.todayVitals?.spo2SampleCount ?? 0) > 0
+        return manual || watch
     }
 
+    /// Heart rate is "done" if any manual pulse OR any Apple Watch HR
+    /// sample landed today. Watch produces these near-constantly, so this
+    /// row will typically auto-tick within minutes of connecting Health.
     private var hrLoggedToday: Bool {
-        readings.contains { Calendar.current.isDateInToday($0.timestamp) && $0.pulse != nil }
+        let manual = readings.contains { Calendar.current.isDateInToday($0.timestamp) && $0.pulse != nil }
+        let watch = healthDataProvider.todayVitals?.heartRateMin != nil
+        return manual || watch
     }
 
     private var medicationLoggedToday: Bool {
@@ -598,6 +635,19 @@ struct HomeView: View {
         treatments.contains { $0.type == .medication }
     }
 
+    /// True when today's SpO2 quest is satisfied by a watch sample rather
+    /// than a manual reading — flips the row meta to "From Apple Watch"
+    /// so the user understands why it auto-ticked.
+    private var spo2FromWatch: Bool {
+        !readings.contains { Calendar.current.isDateInToday($0.timestamp) && $0.spo2 != nil }
+            && (healthDataProvider.todayVitals?.spo2SampleCount ?? 0) > 0
+    }
+
+    private var hrFromWatch: Bool {
+        !readings.contains { Calendar.current.isDateInToday($0.timestamp) && $0.pulse != nil }
+            && healthDataProvider.todayVitals?.heartRateMin != nil
+    }
+
     /// Streak-keeper conditions per Spec v2 §20. Order matches Screens §A1:
     /// Blood oxygen · Heart rate · Water · Medication (if applicable).
     private var quests: [Quest] {
@@ -605,7 +655,7 @@ struct HomeView: View {
             Quest(
                 id: "spo2",
                 title: "Blood oxygen",
-                meta: "Log a reading",
+                meta: spo2FromWatch ? "From Apple Watch" : "Log a reading",
                 isDone: spo2LoggedToday,
                 action: {
                     selectedLogKind = .reading
@@ -615,7 +665,7 @@ struct HomeView: View {
             Quest(
                 id: "hr",
                 title: "Heart rate",
-                meta: "Log a pulse",
+                meta: hrFromWatch ? "From Apple Watch" : "Log a pulse",
                 isDone: hrLoggedToday,
                 action: {
                     selectedLogKind = .reading
@@ -647,12 +697,23 @@ struct HomeView: View {
 
     private var streak: LoggingStreakService.Streak {
         let takesMedication = treatments.contains { $0.type == .medication }
+        // Fold today's cached vitals into the historical day-sets so the
+        // current day counts without waiting on the async fetch below.
+        var spo2Days = watchSpO2Days
+        var hrDays = watchHRDays
+        let today = Calendar.current.startOfDay(for: .now)
+        if let vitals = healthDataProvider.todayVitals {
+            if vitals.spo2SampleCount > 0 { spo2Days.insert(today) }
+            if vitals.heartRateMin != nil { hrDays.insert(today) }
+        }
         return streakService.streak(inputs: .init(
             readings: readings,
             treatments: treatments,
             hydration: hydrationLogs,
             takesMedication: takesMedication,
-            restDays: []
+            restDays: [],
+            watchSpO2Days: spo2Days,
+            watchHRDays: hrDays
         ))
     }
 

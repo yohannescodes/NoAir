@@ -164,11 +164,15 @@ struct ContentView: View {
         let recentReadings = allReadings.filter {
             calendar.isDateInToday($0.timestamp)
         }
+        // Watch samples count as earns per Spec v2 §20.
+        let vitals = healthDataProvider.todayVitals
         OxypointsService(modelContext: modelContext).evaluateEarns(
             readings: recentReadings,
             treatments: recentTreatments,
             hydration: allHydration,
-            takesMedication: takesMedication
+            takesMedication: takesMedication,
+            watchSpO2Today: (vitals?.spo2SampleCount ?? 0) > 0,
+            watchHRToday: vitals?.heartRateMin != nil
         )
     }
 

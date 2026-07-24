@@ -24,20 +24,30 @@ struct OxypointsService {
 
     // MARK: - Earn
 
-    /// Evaluate today's log state and mint the missing earn rows. `now`
-    /// is injected so tests can control the calendar day.
+    /// Evaluate today's log state and mint the missing earn rows.
+    ///
+    /// - `now` — injected so tests can control the calendar day.
+    /// - `watchSpO2Today` / `watchHRToday` — true when HealthKit carries
+    ///   at least one Apple Watch sample of that kind for today. Watch
+    ///   samples satisfy the earn condition the same as a manual log per
+    ///   Spec v2 §20 ("Apple Watch readings count the same as manual
+    ///   entries").
     func evaluateEarns(
         readings: [ReadingRecord],
         treatments: [TreatmentEvent],
         hydration: [HydrationLog],
         takesMedication: Bool,
+        watchSpO2Today: Bool = false,
+        watchHRToday: Bool = false,
         now: Date = .now
     ) {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: now)
 
-        let hasSpO2 = readings.contains { calendar.isDate($0.timestamp, inSameDayAs: today) && $0.spo2 != nil }
-        let hasHR = readings.contains { calendar.isDate($0.timestamp, inSameDayAs: today) && $0.pulse != nil }
+        let manualSpO2 = readings.contains { calendar.isDate($0.timestamp, inSameDayAs: today) && $0.spo2 != nil }
+        let manualHR = readings.contains { calendar.isDate($0.timestamp, inSameDayAs: today) && $0.pulse != nil }
+        let hasSpO2 = manualSpO2 || watchSpO2Today
+        let hasHR = manualHR || watchHRToday
         let hasMed = treatments.contains { calendar.isDate($0.timestamp, inSameDayAs: today) && $0.type == .medication }
         let waterHit = hydration.first(where: { $0.day == today })?.isTargetMet ?? false
 
