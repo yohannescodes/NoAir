@@ -35,6 +35,13 @@ final class UserPreferences {
     /// Spec v2 §21.
     var introSeen: Bool
 
+    /// What Oxy calls the user in-app ("Hey, {displayName}"). Captured in
+    /// onboarding — HealthKit does not expose the user's name (only DOB,
+    /// biological sex, blood type, skin type via HKCharacteristic), so we
+    /// have to ask. Empty string means "user skipped" — Home falls back to
+    /// a name-free greeting.
+    var displayName: String
+
     // MARK: - Oxy cosmetics (Spec v2 §20)
 
     /// Currently-equipped outfit item slug (nil = bare Oxy).
@@ -56,6 +63,7 @@ final class UserPreferences {
         trackedKindsRaw: [String] = LogEntryKind.allCases.map(\.rawValue),
         onboardingComplete: Bool = false,
         introSeen: Bool = false,
+        displayName: String = "",
         equippedOutfitSlug: String? = nil,
         equippedExpressionSlug: String = "expr.happy",
         equippedColorSlug: String = "color.mint",
@@ -68,6 +76,7 @@ final class UserPreferences {
         self.trackedKindsRaw = trackedKindsRaw
         self.onboardingComplete = onboardingComplete
         self.introSeen = introSeen
+        self.displayName = displayName
         self.equippedOutfitSlug = equippedOutfitSlug
         self.equippedExpressionSlug = equippedExpressionSlug
         self.equippedColorSlug = equippedColorSlug

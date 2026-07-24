@@ -111,7 +111,7 @@ struct HomeView: View {
 
     private var header: some View {
         HStack(spacing: 8) {
-            Text("Hey, Yohannes")
+            Text(greeting)
                 .font(.system(size: 24, weight: .heavy, design: .rounded))
                 .foregroundStyle(Theme.textPrimary)
             Spacer()
@@ -228,6 +228,12 @@ struct HomeView: View {
                                 .foregroundStyle(Theme.textTertiary)
                                 .baselineOffset(2)
                         }
+                    }
+
+                    if let freshness = latestReadingFreshness {
+                        Text(freshness)
+                            .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                            .foregroundStyle(Theme.textTertiary)
                     }
 
                     Text(mascotHomeLine)
@@ -557,6 +563,16 @@ struct HomeView: View {
 
     // MARK: - Derived data
 
+    /// Home header greeting. Uses the name the user gave Oxy during
+    /// onboarding; falls back to a name-free "Hey there" if they skipped
+    /// the ask. HealthKit does NOT expose the user's name (only DOB /
+    /// biological sex / blood type via HKCharacteristic), so this is the
+    /// only source of truth.
+    private var greeting: String {
+        let name = preferences.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? "Hey there" : "Hey, \(name)"
+    }
+
     private var latestReading: ReadingRecord? { readings.first }
 
     private var latestSpo2Display: Int {
@@ -573,6 +589,39 @@ struct HomeView: View {
             return Int(watch.value.rounded())
         }
         return nil
+    }
+
+    /// Human-language freshness of whatever's displayed on the hero.
+    /// "Just now" / "12m ago" / "3h ago" / "Yesterday, 09:12" / "Mar 12".
+    /// Nil when there's no reading to date (empty state).
+    private var latestReadingFreshness: String? {
+        // Pick the newer of manual and watch, so the label matches the
+        // number the hero actually shows.
+        let manualDate = latestReading?.timestamp
+        let watchDate = healthDataProvider.latestWatchSpO2?.date
+        guard let date = [manualDate, watchDate].compactMap({ $0 }).max() else {
+            return nil
+        }
+        let interval = Date().timeIntervalSince(date)
+        if interval < 60 { return "just now" }
+        if interval < 3_600 {
+            return "\(Int(interval / 60))m ago"
+        }
+        if interval < 6 * 3_600 {
+            return "\(Int(interval / 3_600))h ago"
+        }
+        let calendar = Calendar.current
+        let f = DateFormatter()
+        if calendar.isDateInToday(date) {
+            f.dateFormat = "HH:mm"
+            return "today at \(f.string(from: date))"
+        }
+        if calendar.isDateInYesterday(date) {
+            f.dateFormat = "HH:mm"
+            return "yesterday at \(f.string(from: date))"
+        }
+        f.dateFormat = "MMM d"
+        return f.string(from: date)
     }
 
     private var zoneLabel: String {

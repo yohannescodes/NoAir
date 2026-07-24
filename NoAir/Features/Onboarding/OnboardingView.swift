@@ -19,9 +19,12 @@ struct OnboardingView: View {
     let preferences: UserPreferences
 
     @State private var chat: [OnboardingBubble] = []
-    @State private var step: Step = .track
+    @State private var step: Step = .name
     @State private var selectedTracked: Set<TrackOption> = []
     @State private var baseline: Int = 78
+    @State private var nameDraft: String = ""
+    @FocusState private var nameFocused: Bool
+    @State private var showsHealthPreAsk: Bool = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -33,6 +36,15 @@ struct OnboardingView: View {
         .padding(.bottom, 26)
         .background(Theme.background.ignoresSafeArea())
         .onAppear(perform: startIfNeeded)
+        .sheet(isPresented: $showsHealthPreAsk) {
+            HealthKitPreAskSheet(onContinue: {
+                Task { await healthDataProvider.connect() }
+                afterHealthAsked(connected: true)
+            })
+            .presentationDetents([.large])
+            .presentationDragIndicator(.hidden)
+            .interactiveDismissDisabled(false)
+        }
     }
 
     // MARK: - Chat scroll
@@ -117,6 +129,8 @@ struct OnboardingView: View {
     private var responsePane: some View {
         VStack(spacing: 10) {
             switch step {
+            case .name:
+                nameEntry
             case .track:
                 trackChips
             case .baseline:
@@ -130,6 +144,54 @@ struct OnboardingView: View {
             }
         }
         .padding(.top, 12)
+    }
+
+    // MARK: Step 0 — Name
+
+    /// Ask what to call the user. Skippable — Home falls back to "Hey
+    /// there". HealthKit doesn't expose the user's name (only DOB /
+    /// biological sex / blood type via HKCharacteristic), so we have to
+    /// ask.
+    private var nameEntry: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 8) {
+                TextField("Your name or nickname", text: $nameDraft)
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Theme.textPrimary)
+                    .textInputAutocapitalization(.words)
+                    .autocorrectionDisabled()
+                    .submitLabel(.done)
+                    .focused($nameFocused)
+                    .onSubmit(confirmName)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 11)
+                    .background(
+                        Capsule(style: .continuous)
+                            .fill(Theme.surface)
+                            .overlay(
+                                Capsule(style: .continuous)
+                                    .strokeBorder(Theme.stroke, lineWidth: 1)
+                            )
+                    )
+            }
+            HStack(spacing: 8) {
+                onboardingChip(label: "Skip", style: .secondary, action: skipName)
+                onboardingChip(
+                    label: "Next  →",
+                    style: .cta,
+                    action: confirmName
+                )
+                .disabled(cleanedName == nil)
+                .opacity(cleanedName == nil ? 0.5 : 1)
+            }
+            .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+        .onAppear { nameFocused = true }
+    }
+
+    private var cleanedName: String? {
+        let trimmed = nameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     // MARK: Step 1 — Track (multi-select)
@@ -309,7 +371,26 @@ struct OnboardingView: View {
 
     private func startIfNeeded() {
         guard chat.isEmpty else { return }
-        push(.mascot("Hey, I'm Oxy 👋 I'll help you keep your heart story in one place. What should we track together?"))
+        push(.mascot("Hey, I'm Oxy 👋 First — what should I call you?"))
+    }
+
+    private func confirmName() {
+        guard let name = cleanedName else { return }
+        nameFocused = false
+        push(.user(name))
+        preferences.displayName = name
+        preferences.updatedAt = .now
+        pushAfter(0.4, .mascot("Nice to meet you, \(name). So — what should we track together?"))
+        advance(to: .track, delay: 0.35)
+    }
+
+    private func skipName() {
+        nameFocused = false
+        push(.user("Skip"))
+        preferences.displayName = ""
+        preferences.updatedAt = .now
+        pushAfter(0.4, .mascot("No problem. What should we track together?"))
+        advance(to: .track, delay: 0.35)
     }
 
     private func toggleTracked(_ option: TrackOption) {
@@ -348,8 +429,18 @@ struct OnboardingView: View {
     private func connectHealth(_ yes: Bool) {
         push(.user(yes ? "Yes, connect Health" : "Later"))
         if yes {
-            Task { await healthDataProvider.connect() }
+            // Show the App Store-safe pre-ask sheet FIRST (per-type why,
+            // privacy note). Real HKAuth fires from inside the sheet on
+            // Continue. Fixes Guideline 5.1.1 risk.
+            showsHealthPreAsk = true
+        } else {
+            afterHealthAsked(connected: false)
         }
+    }
+
+    /// Shared post-ask hook so both the pre-ask sheet's Continue path
+    /// and the "Later" path end up in the same next-step land.
+    private func afterHealthAsked(connected: Bool) {
         pushAfter(0.4, .mascot("All set. I'll check in gently, and I'll flag it if your surroundings — altitude, heat, crowding — might be why a reading looks different. Ready to see your dashboard?"))
         advance(to: .enter, delay: 0.35)
     }
@@ -405,7 +496,7 @@ private struct OnboardingBubble: Identifiable, Equatable {
 
 // MARK: - Onboarding step machine
 
-private enum Step { case track, baseline, health, enter, done }
+private enum Step { case name, track, baseline, health, enter, done }
 
 // MARK: - Track option (Spec §3 row 1 wording)
 

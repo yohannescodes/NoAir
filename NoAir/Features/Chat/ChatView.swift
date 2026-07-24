@@ -57,11 +57,29 @@ struct ChatView: View {
         .task { await refreshContextIfNeeded() }
     }
 
+    /// Debounce window for the cold-open context refresh. Two minutes is
+    /// long enough that a rapid re-open (user dismisses chat, opens it
+    /// again) skips the round-trip, but short enough that a real cold
+    /// launch always sees fresh data.
+    private static let contextRefreshTTL: TimeInterval = 120
+    private static let lastRefreshKey = "oxylittle.chat.contextLastRefresh"
+
     /// Fired once per modal open. Pulls the freshest HealthKit + environment
-    /// snapshot so the very first turn has grounding, even if the user
-    /// hasn't opened Home in a while. Guarded so re-render doesn't re-fire.
+    /// snapshot so the very first turn has grounding.
+    ///
+    /// `.task` re-runs whenever ChatView's identity changes — and inside
+    /// a `fullScreenCover` that happens on every present. `@State
+    /// isLoadingContext` is a fresh instance each present so it cannot
+    /// guard across them. Persist the last-refresh timestamp in
+    /// UserDefaults instead: skip the round-trip if the last refresh
+    /// was within the TTL.
     private func refreshContextIfNeeded() async {
         guard !isLoadingContext else { return }
+        let now = Date().timeIntervalSince1970
+        let last = UserDefaults.standard.double(forKey: Self.lastRefreshKey)
+        if last > 0, now - last < Self.contextRefreshTTL {
+            return
+        }
         isLoadingContext = true
         async let hk: Void = healthDataProvider.refresh()
         async let enrichment = readingEnricher.enrichReading()
@@ -70,6 +88,7 @@ struct ChatView: View {
             latest.apply(freshEnrichment)
             try? modelContext.save()
         }
+        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: Self.lastRefreshKey)
         isLoadingContext = false
     }
 
@@ -427,7 +446,15 @@ struct ChatView: View {
 
         do {
             let context = buildContextDigest()
-            let history = messages.filter { $0.id != placeholder.id && $0.state != .failed }
+            // Exclude placeholder AND the just-inserted userMessage —
+            // service.send appends the current turn itself, so leaving
+            // userMessage in `history` sends it twice, and Gemini gets
+            // two consecutive user turns (which it collapses/ignores).
+            let history = messages.filter {
+                $0.id != placeholder.id
+                    && $0.id != userMessage.id
+                    && $0.state != .failed
+            }
             let reply = try await service.send(history: history, userTurn: userText, context: context)
             await streamIntoBubble(reply, placeholder: placeholder)
             // Arrival feedback once — not per streamed chunk — so the

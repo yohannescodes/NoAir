@@ -47,13 +47,14 @@ final class GeminiChatService {
             throw GeminiCommentaryError.invalidResponse
         }
 
-        // Compose contents: system preamble + context + prior turns + this
-        // user turn. Gemini expects role "user"/"model"; we map ChatRole.
+        // Compose contents. Gemini requires strict user↔model alternation
+        // in `contents`, and expects the persona/context in the top-level
+        // `systemInstruction` field — NOT stuffed into a fake user turn.
+        // Previously we packed the preamble + context into a role="user"
+        // message right before another role="user" (the actual turn),
+        // which Gemini collapses/mis-parses and answers with generic
+        // "I don't have access to your data" boilerplate.
         var contents: [[String: Any]] = []
-        contents.append([
-            "role": "user",
-            "parts": [["text": systemPreamble + "\n\n---\n\nContext for your reply:\n\(context)"]]
-        ])
         for turn in history {
             contents.append([
                 "role": turn.role == .user ? "user" : "model",
@@ -65,7 +66,13 @@ final class GeminiChatService {
             "parts": [["text": userTurn]]
         ])
 
-        let body: [String: Any] = ["contents": contents]
+        let systemText = systemPreamble + "\n\n---\n\nContext for your reply:\n\(context)"
+        let body: [String: Any] = [
+            "contents": contents,
+            "systemInstruction": [
+                "parts": [["text": systemText]]
+            ]
+        ]
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
