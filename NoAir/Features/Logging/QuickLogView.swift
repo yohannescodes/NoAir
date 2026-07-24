@@ -242,8 +242,14 @@ private struct SavedToast: View {
         .background(
             Capsule(style: .continuous)
                 .fill(Theme.accent)
+                .overlay(
+                    Capsule(style: .continuous)
+                        .strokeBorder(Theme.accentEdge, lineWidth: 1)
+                )
         )
-        .shadow(color: Theme.accent.opacity(0.35), radius: 12, x: 0, y: 6)
+        // Restrained glow — was 12/35% halo, cut to 6/18% so the toast
+        // reads as elevated without haloing the whole screen.
+        .shadow(color: Theme.accent.opacity(0.18), radius: 6, x: 0, y: 3)
     }
 }
 

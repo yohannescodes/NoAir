@@ -266,9 +266,9 @@ struct OnboardingView: View {
                 .compositingGroup()
                 .shadow(
                     color: chipShadow(style),
-                    radius: style == .cta ? 12 : 0,
+                    radius: style == .cta ? 6 : 0,
                     x: 0,
-                    y: style == .cta ? 4 : 3
+                    y: style == .cta ? 3 : 3
                 )
         }
         .buttonStyle(NAPressableButtonStyle())
@@ -296,7 +296,10 @@ struct OnboardingView: View {
 
     private func chipShadow(_ style: ChipStyle) -> Color {
         switch style {
-        case .cta: return Theme.accent.opacity(0.45)
+        // Softer glow: white pill on dark bg is bright enough already;
+        // a 45% halo turns into eye-strain. 20% at 6pt is a hint, not
+        // a burst.
+        case .cta: return Theme.accent.opacity(0.2)
         case .primary: return Theme.accentEdge
         case .secondary: return .clear
         }

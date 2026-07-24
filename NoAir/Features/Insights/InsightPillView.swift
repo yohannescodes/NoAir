@@ -70,7 +70,7 @@ struct InsightPillView: View {
                         RoundedRectangle(cornerRadius: 18, style: .continuous)
                             .strokeBorder(Theme.accent.opacity(0.4), lineWidth: 1)
                     )
-                    .shadow(color: .black.opacity(0.45), radius: 30, y: 10)
+                    // Border-only elevation — black shadows on dark bg are invisible.
             )
         }
         .buttonStyle(NAPressableButtonStyle())
@@ -148,7 +148,7 @@ struct InsightPillView: View {
                     RoundedRectangle(cornerRadius: 22, style: .continuous)
                         .strokeBorder(Theme.accent.opacity(0.45), lineWidth: 1)
                 )
-                .shadow(color: .black.opacity(0.55), radius: 40, y: 16)
+                // No black shadow: invisible on dark bg. Border does the elevation.
         )
     }
 

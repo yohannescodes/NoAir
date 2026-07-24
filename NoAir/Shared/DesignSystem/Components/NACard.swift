@@ -33,7 +33,8 @@ struct NACard<Content: View>: View {
                         .strokeBorder(Theme.stroke, lineWidth: 1)
                 )
         )
-        .shadow(color: .black.opacity(0.06), radius: 12, y: 6)
+        // No shadow: black-on-dark drops nothing but muddies the frame.
+        // Elevation comes from the hairline stroke + surface lightness.
     }
 }
 

@@ -264,7 +264,13 @@ struct HomeView: View {
                 .background(
                     Circle()
                         .fill(Theme.accent)
-                        .shadow(color: Theme.accent.opacity(0.4), radius: 12, x: 0, y: 6)
+                        .overlay(
+                            Circle()
+                                .strokeBorder(Theme.accentEdge, lineWidth: 1)
+                        )
+                        // Subtle glow only — the previous 12pt / 40% halo
+                        // read as noise on the dark background.
+                        .shadow(color: Theme.accent.opacity(0.18), radius: 6, x: 0, y: 3)
                 )
                 .rotationEffect(.degrees(isRefreshingContext ? 360 : 0))
                 .animation(

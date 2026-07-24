@@ -54,36 +54,37 @@ enum Theme {
     /// Tinted accent fill (Ask Oxy pill, chat entry) — `rgba(64,222,194,.12)`.
     static let accentSoft = Color(uiColor: UIColor(red: 64/255, green: 222/255, blue: 194/255, alpha: 0.12))
 
-    static let accentGradient = LinearGradient(
-        colors: [fixed(0x40E3BF), fixed(0x33B8D9)],
-        startPoint: .topLeading,
-        endPoint: .bottomTrailing
-    )
-
     // MARK: - Entry kinds (§3)
 
     /// SpO₂ · Heart rate · Journal · Water — same mint as accent.
     static let reading = accent
 
-    /// Ventilation sessions — deep blue `#2F85D6` fill / `#6BC2FF` for text.
-    static let ventilation = fixed(0x2F85D6)
+    /// Ventilation sessions — softer blue than the design-handoff `#2F85D6`
+    /// (75% sat). Desaturated ~15% for dark-mode comfort per Robi's rule.
+    static let ventilation = fixed(0x4C8FCC)
 
-    /// Treatment events — deep orange `#EB731C` fill / `#FF9E5C` for text.
-    static let treatment = fixed(0xEB731C)
+    /// Treatment events — softer orange than the handoff `#EB731C`
+    /// (84% sat, hot). Desaturated ~20% + lightened so it stops burning
+    /// on the dark background.
+    static let treatment = fixed(0xD2865B)
 
-    /// Lab results — deep purple `#8558E6` fill / `#B899FF` for text.
-    static let lab = fixed(0x8558E6)
+    /// Lab results — softer purple than the handoff `#8558E6` (73% sat).
+    /// Desaturated ~15% for dark-mode comfort.
+    static let lab = fixed(0x9977DB)
 
     /// HealthKit-sourced rows — muted grey `#999999`.
     static let watch = fixed(0x999999)
 
     // MARK: - Feedback (§3)
 
-    /// Env. banners, water-behind, cautions — `#FFB840` fill / `#E8A23A` text.
-    static let warning = fixed(0xFFB840)
+    /// Env. banners, water-behind, cautions — softer amber than the
+    /// handoff `#FFB840` (100% sat, max-hot). Desaturated ~25% so the
+    /// alert cue reads as concern, not fire.
+    static let warning = fixed(0xE8B463)
 
-    /// 🔥 Streak flame & day count — `#FF9E56`.
-    static let streak = fixed(0xFF9E56)
+    /// 🔥 Streak flame & day count — softer than the handoff `#FF9E56`
+    /// (100% sat). Desaturated ~20% for dark-mode comfort.
+    static let streak = fixed(0xF2A87A)
 
     /// 🪙 Oxypoints balance & earn amounts — same mint as accent.
     static let oxypoints = accent
