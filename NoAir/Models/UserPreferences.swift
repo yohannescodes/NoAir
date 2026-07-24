@@ -29,6 +29,11 @@ final class UserPreferences {
 
     var trackedKindsRaw: [String]
     var onboardingComplete: Bool
+    /// Whether the user has seen the K1-K3 intro flow (Welcome / Meet Oxy /
+    /// From the developer). Distinct from `onboardingComplete` so Settings
+    /// → Reset onboarding can flip this back false and replay from K1 per
+    /// Spec v2 §21.
+    var introSeen: Bool
 
     // MARK: - Oxy cosmetics (Spec v2 §20)
 
@@ -50,6 +55,7 @@ final class UserPreferences {
         hydrationUnit: HydrationUnit = .ml,
         trackedKindsRaw: [String] = LogEntryKind.allCases.map(\.rawValue),
         onboardingComplete: Bool = false,
+        introSeen: Bool = false,
         equippedOutfitSlug: String? = nil,
         equippedExpressionSlug: String = "expr.happy",
         equippedColorSlug: String = "color.mint",
@@ -61,6 +67,7 @@ final class UserPreferences {
         self.hydrationUnitRaw = hydrationUnit.rawValue
         self.trackedKindsRaw = trackedKindsRaw
         self.onboardingComplete = onboardingComplete
+        self.introSeen = introSeen
         self.equippedOutfitSlug = equippedOutfitSlug
         self.equippedExpressionSlug = equippedExpressionSlug
         self.equippedColorSlug = equippedColorSlug

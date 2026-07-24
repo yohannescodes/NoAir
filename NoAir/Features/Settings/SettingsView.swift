@@ -270,6 +270,9 @@ struct SettingsView: View {
     private var resetFooter: some View {
         Button {
             preferences.onboardingComplete = false
+            // Per Spec v2 §21: reset replays from K1, so clear introSeen too.
+            preferences.introSeen = false
+            preferences.updatedAt = .now
             try? modelContext.save()
             dismiss()
         } label: {

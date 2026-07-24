@@ -34,6 +34,13 @@ struct ContentView: View {
                 if let preferences = allPreferences.first {
                     if preferences.onboardingComplete {
                         mainApp(preferences: preferences)
+                    } else if !preferences.introSeen {
+                        OnboardingIntroView(onFinish: {
+                            preferences.introSeen = true
+                            preferences.updatedAt = .now
+                            try? modelContext.save()
+                        })
+                        .transition(.opacity)
                     } else {
                         OnboardingView(preferences: preferences)
                             .transition(.opacity)
