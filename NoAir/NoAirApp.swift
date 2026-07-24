@@ -27,6 +27,10 @@ struct NoAirApp: App {
             HydrationLog.self,
             IMTSession.self,
             JournalEntry.self,
+            ChatMessage.self,
+            GeneratedInsight.self,
+            OxypointsLedger.self,
+            CosmeticItem.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
@@ -41,6 +45,7 @@ struct NoAirApp: App {
         WindowGroup {
             ContentView(readingEnricher: readingEnricher)
                 .tint(Theme.accent)
+                .preferredColorScheme(.dark)
                 .environment(healthKitService)
                 .environment(healthDataProvider)
         }
