@@ -76,7 +76,6 @@ struct HomeView: View {
                     .transition(.opacity)
             }
         }
-        .overlay(alignment: .bottomTrailing) { refreshFAB }
         .refreshable {
             await refreshContext()
         }
@@ -118,6 +117,7 @@ struct HomeView: View {
             Spacer()
             oxypointsPill
             streakPill
+            refreshHeaderButton
             Button(action: onOpenSettings) {
                 Image(systemName: "gearshape")
                     .font(.system(size: 17, weight: .semibold))
@@ -127,6 +127,34 @@ struct HomeView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Settings")
         }
+    }
+
+    /// Header-anchored refresh button. Fans out HK vitals + environment
+    /// enrichment + watch streak recompute in one tap. Rotates while the
+    /// async work is in flight so the tap registers immediately.
+    ///
+    /// Lives in the header rather than as a bottom-right FAB because the
+    /// FAB overlapped the Hydration tile's `+` button on ≤iPhone 12 Pro
+    /// sized screens.
+    private var refreshHeaderButton: some View {
+        Button {
+            Task { await refreshContext() }
+        } label: {
+            Image(systemName: "arrow.clockwise")
+                .font(.system(size: 15, weight: .heavy))
+                .foregroundStyle(isRefreshingContext ? Theme.accent : Theme.textTertiary)
+                .frame(width: 32, height: 32)
+                .rotationEffect(.degrees(isRefreshingContext ? 360 : 0))
+                .animation(
+                    isRefreshingContext
+                        ? .linear(duration: 1).repeatForever(autoreverses: false)
+                        : .default,
+                    value: isRefreshingContext
+                )
+        }
+        .buttonStyle(.plain)
+        .disabled(isRefreshingContext)
+        .accessibilityLabel(isRefreshingContext ? "Refreshing context" : "Refresh Health and environment")
     }
 
     /// Oxypoints balance pill per Screens v2 §A1 — tap opens the closet.
@@ -246,45 +274,6 @@ struct HomeView: View {
                         .strokeBorder(Theme.stroke, lineWidth: 1)
                 )
         )
-    }
-
-    /// Floating action button anchored bottom-right of the Home scroll.
-    /// One tap fans out: HealthKit vitals refresh + environment enrichment
-    /// (weather, temperature, humidity, altitude, locality) + watch streak
-    /// recompute. Rotates while `isRefreshingContext` so the user sees the
-    /// tap register even before the async work returns.
-    private var refreshFAB: some View {
-        Button {
-            Task { await refreshContext() }
-        } label: {
-            Image(systemName: "arrow.clockwise")
-                .font(.system(size: 20, weight: .heavy))
-                .foregroundStyle(Theme.background)
-                .frame(width: 52, height: 52)
-                .background(
-                    Circle()
-                        .fill(Theme.accent)
-                        .overlay(
-                            Circle()
-                                .strokeBorder(Theme.accentEdge, lineWidth: 1)
-                        )
-                        // Subtle glow only — the previous 12pt / 40% halo
-                        // read as noise on the dark background.
-                        .shadow(color: Theme.accent.opacity(0.18), radius: 6, x: 0, y: 3)
-                )
-                .rotationEffect(.degrees(isRefreshingContext ? 360 : 0))
-                .animation(
-                    isRefreshingContext
-                        ? .linear(duration: 1).repeatForever(autoreverses: false)
-                        : .default,
-                    value: isRefreshingContext
-                )
-        }
-        .buttonStyle(NAPressableButtonStyle())
-        .disabled(isRefreshingContext)
-        .padding(.trailing, 18)
-        .padding(.bottom, 84) // clear of the tab bar + insight pill
-        .accessibilityLabel(isRefreshingContext ? "Refreshing context" : "Refresh Health and environment")
     }
 
     private var energyCard: some View {
