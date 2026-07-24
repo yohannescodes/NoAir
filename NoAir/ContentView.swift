@@ -23,20 +23,34 @@ struct ContentView: View {
     @State private var showsCloset = false
     @State private var chatSeedPrompt: String?
     @State private var didRunLaunchTasks = false
+    /// True on cold launch; the LaunchAnimationView flips this false when
+    /// its ~7s sequence finishes. Not reset on scene reactivation, so
+    /// returning from background never re-plays the splash.
+    @State private var showsLaunch = true
 
     var body: some View {
-        Group {
-            if let preferences = allPreferences.first {
-                if preferences.onboardingComplete {
-                    mainApp(preferences: preferences)
+        ZStack {
+            Group {
+                if let preferences = allPreferences.first {
+                    if preferences.onboardingComplete {
+                        mainApp(preferences: preferences)
+                    } else {
+                        OnboardingView(preferences: preferences)
+                            .transition(.opacity)
+                    }
                 } else {
-                    OnboardingView(preferences: preferences)
-                        .transition(.opacity)
+                    Theme.background
+                        .ignoresSafeArea()
+                        .onAppear(perform: bootstrapPreferences)
                 }
-            } else {
-                Theme.background
-                    .ignoresSafeArea()
-                    .onAppear(perform: bootstrapPreferences)
+            }
+
+            if showsLaunch {
+                LaunchAnimationView(onDone: {
+                    withAnimation(.easeOut(duration: 0.2)) { showsLaunch = false }
+                })
+                .transition(.opacity)
+                .zIndex(1)
             }
         }
         .task {
