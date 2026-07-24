@@ -30,26 +30,35 @@ struct ContentView: View {
 
     var body: some View {
         ZStack {
-            Group {
-                if let preferences = allPreferences.first {
-                    if preferences.onboardingComplete {
-                        mainApp(preferences: preferences)
-                    } else if !preferences.introSeen {
-                        OnboardingIntroView(onFinish: {
-                            preferences.introSeen = true
-                            preferences.updatedAt = .now
-                            try? modelContext.save()
-                        })
-                        .transition(.opacity)
-                    } else {
-                        OnboardingView(preferences: preferences)
+            // Do NOT construct the onboarding / main app view behind the
+            // launch splash. If we do, their .onAppear / .task / @FocusState
+            // fire immediately on cold launch — that's why the keyboard was
+            // popping up and Oxy's first haptic + Tink sound played while
+            // the splash was still visible. Gate on !showsLaunch so the
+            // real UI is instantiated only after the animation finishes.
+            if !showsLaunch {
+                Group {
+                    if let preferences = allPreferences.first {
+                        if preferences.onboardingComplete {
+                            mainApp(preferences: preferences)
+                        } else if !preferences.introSeen {
+                            OnboardingIntroView(onFinish: {
+                                preferences.introSeen = true
+                                preferences.updatedAt = .now
+                                try? modelContext.save()
+                            })
                             .transition(.opacity)
+                        } else {
+                            OnboardingView(preferences: preferences)
+                                .transition(.opacity)
+                        }
+                    } else {
+                        Theme.background
+                            .ignoresSafeArea()
+                            .onAppear(perform: bootstrapPreferences)
                     }
-                } else {
-                    Theme.background
-                        .ignoresSafeArea()
-                        .onAppear(perform: bootstrapPreferences)
                 }
+                .transition(.opacity)
             }
 
             if showsLaunch {
