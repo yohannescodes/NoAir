@@ -16,6 +16,7 @@ struct TrendsView: View {
     @State private var overnightHeartRate: [QuantityPoint] = []
     @State private var showLegacy = false
     @State private var showsRecap = false
+    @State private var sourceFilter: TrendSourceFilter = .all
 
     var body: some View {
         ScrollView {
@@ -100,13 +101,25 @@ struct TrendsView: View {
     }
 
     private var weeklyChartCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("SpO2 · 7 days")
-                .font(.system(size: 12, weight: .heavy, design: .rounded))
-                .foregroundStyle(Theme.textPrimary)
-            Text("Shaded band is YOUR normal range")
-                .font(.system(size: 10, design: .rounded))
-                .foregroundStyle(Theme.textTertiary)
+        let merged = TrendsMerger.mergedSpO2(
+            manual: visibleManualReadings,
+            watch: watchHistoryPoints,
+            window: chartWindow
+        )
+        let filtered = merged.filter { sourceFilter.includes($0.source) }
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("SpO2 · 7 days")
+                        .font(.system(size: 12, weight: .heavy, design: .rounded))
+                        .foregroundStyle(Theme.textPrimary)
+                    Text("Shaded band is YOUR normal range")
+                        .font(.system(size: 10, design: .rounded))
+                        .foregroundStyle(Theme.textTertiary)
+                }
+                Spacer()
+                sourceFilterPill
+            }
 
             Chart {
                 RectangleMark(
@@ -115,26 +128,38 @@ struct TrendsView: View {
                 )
                 .foregroundStyle(Theme.accent.opacity(0.12))
 
-                ForEach(watchHistoryPoints) { point in
+                // Merged series line — one continuous polyline covering both
+                // sources (§22). Dedupe already collapsed overlapping
+                // manual+watch samples inside the same 5-min bucket.
+                ForEach(filtered) { point in
                     LineMark(
                         x: .value("Time", point.date),
                         y: .value("SpO2", point.value),
-                        series: .value("Source", "Watch")
+                        series: .value("Series", "spo2")
                     )
                     .interpolationMethod(.monotone)
-                    .foregroundStyle(Theme.watch.opacity(0.45))
-                    .lineStyle(StrokeStyle(lineWidth: 1.5))
+                    .foregroundStyle(Theme.accent.opacity(0.55))
+                    .lineStyle(StrokeStyle(lineWidth: 1.8))
                 }
 
-                ForEach(visibleManualReadings, id: \.id) { reading in
-                    if let spo2 = reading.spo2 {
-                        PointMark(
-                            x: .value("Time", reading.timestamp),
-                            y: .value("SpO2", spo2)
-                        )
-                        .symbolSize(60)
-                        .foregroundStyle(SpO2Zone(spo2: spo2).color)
-                    }
+                // Per-point source markers so the user can see which readings
+                // are their own vs the watch. Watch = small watch glyph (via
+                // .watch tint), manual = zone-colored dot.
+                ForEach(filtered) { point in
+                    PointMark(
+                        x: .value("Time", point.date),
+                        y: .value("SpO2", point.value)
+                    )
+                    .symbolSize(point.source == .manual ? 60 : 28)
+                    .foregroundStyle(point.source == .manual
+                        ? SpO2Zone(spo2: Int(point.value.rounded())).color
+                        : Theme.watch)
+                    .symbol(point.source == .manual ? .circle : .diamond)
+                }
+                // (dead branch removed — merged series above renders both)
+                ForEach([TrendPoint](), id: \.id) { _ in
+                    RuleMark(y: .value("", 0))
+                        .opacity(0)
                 }
             }
             .chartYScale(domain: 70...100)
@@ -393,5 +418,57 @@ struct TrendsView: View {
 
         watchHistoryPoints = await history
         overnightHeartRate = await heartRate
+    }
+
+    // MARK: - Source filter (§22)
+
+    /// Segmented pill that lets the user isolate the merged Trends chart
+    /// to one source. Default is `.all` — both manual and watch samples
+    /// merged into one line.
+    private var sourceFilterPill: some View {
+        HStack(spacing: 4) {
+            ForEach(TrendSourceFilter.allCases, id: \.self) { option in
+                Button {
+                    sourceFilter = option
+                } label: {
+                    Text(option.label)
+                        .font(.system(size: 10.5, weight: .heavy, design: .rounded))
+                        .foregroundStyle(sourceFilter == option ? Theme.onAccent : Theme.textSecondary)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
+                        .background(
+                            Capsule().fill(sourceFilter == option ? Theme.accent : Color.clear)
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(3)
+        .background(
+            Capsule().fill(Theme.surfaceElevated)
+        )
+    }
+}
+
+/// Filter for the Trends merged series (§22). Isolates the chart to
+/// manual entries only, HealthKit samples only, or both merged.
+enum TrendSourceFilter: String, CaseIterable {
+    case all, manual, watch
+
+    var label: String {
+        switch self {
+        case .all: "All"
+        case .manual: "Manual"
+        case .watch: "Watch"
+        }
+    }
+
+    /// True if the given TrendPoint should render under this filter.
+    func includes(_ source: TrendPoint.Source) -> Bool {
+        switch self {
+        case .all: true
+        case .manual: source == .manual
+        case .watch: source == .watch
+        }
     }
 }
