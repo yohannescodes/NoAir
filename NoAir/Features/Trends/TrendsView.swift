@@ -38,13 +38,14 @@ struct TrendsView: View {
                     weekInReviewButton
                 }
 
+                biggestDipsCard
+
                 DisclosureGroup(isExpanded: $showLegacy) {
                     VStack(spacing: 14) {
                         overnightCard
                         if healthDataProvider.isConnected {
                             cardiacCard
                         }
-                        recentReadingsCard
                     }
                     .padding(.top, 12)
                 } label: {
@@ -339,24 +340,46 @@ struct TrendsView: View {
         }
     }
 
-    /// Recent readings — inline v2 rows, no more NACard chrome. Same
-    /// styling as the Timeline row so the two feel consistent.
-    private var recentReadingsCard: some View {
+    /// Biggest dips this week — the three readings that fell furthest
+    /// below the user's personal zone. Answers "when was I most out of
+    /// my zone this week?" — a Trends-native question that neither Home
+    /// nor Timeline surfaces. Replaces the old "Recent readings" list,
+    /// which duplicated Timeline without adding new information.
+    ///
+    /// When there are no below-zone dips in the window, we say so
+    /// warmly rather than showing an empty box — a zero-dip week is
+    /// worth naming.
+    private var biggestDipsCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("RECENT READINGS")
-                .font(.system(size: 11, weight: .heavy, design: .rounded))
-                .foregroundStyle(Theme.textTertiary)
-                .tracking(0.4)
+            HStack(alignment: .firstTextBaseline) {
+                Text("BIGGEST DIPS · 7 DAYS")
+                    .font(.system(size: 11, weight: .heavy, design: .rounded))
+                    .foregroundStyle(Theme.textTertiary)
+                    .tracking(0.4)
+                Spacer()
+                Text("below your zone")
+                    .font(.system(size: 10, design: .rounded))
+                    .foregroundStyle(Theme.textTertiary)
+            }
 
-            if readings.isEmpty {
-                Text("No readings logged yet.")
-                    .font(.system(size: 12, design: .rounded))
-                    .foregroundStyle(Theme.textSecondary)
-                    .padding(.vertical, 6)
+            if biggestDips.isEmpty {
+                HStack(spacing: 10) {
+                    Text("✨").font(.system(size: 18))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("No dips below your zone this week")
+                            .font(.system(size: 13, weight: .heavy, design: .rounded))
+                            .foregroundStyle(Theme.textPrimary)
+                        Text("Your readings all stayed in your personal range.")
+                            .font(.system(size: 11.5, design: .rounded))
+                            .foregroundStyle(Theme.textSecondary)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.vertical, 6)
             } else {
                 VStack(spacing: 8) {
-                    ForEach(readings.prefix(8), id: \.id) { reading in
-                        recentReadingRow(reading)
+                    ForEach(biggestDips) { dip in
+                        biggestDipRow(dip)
                     }
                 }
             }
@@ -366,21 +389,30 @@ struct TrendsView: View {
         .background(cardChrome)
     }
 
-    private func recentReadingRow(_ reading: ReadingRecord) -> some View {
-        let zone = reading.spo2.map { SpO2Zone(spo2: $0) }
-        return HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Text(reading.spo2.map { "\($0)%" } ?? "HR only")
-                .font(.system(size: 16, weight: .heavy, design: .rounded))
-                .foregroundStyle(zone?.color ?? Theme.textSecondary)
-            if let pulse = reading.pulse {
-                Text("\(pulse) bpm")
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundStyle(Theme.textSecondary)
+    private func biggestDipRow(_ dip: BiggestDip) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            // Delta from personal zone floor — the actual insight.
+            Text("−\(dip.deltaBelowZone)")
+                .font(.system(size: 20, weight: .heavy, design: .rounded))
+                .foregroundStyle(Theme.warning)
+                .frame(minWidth: 44, alignment: .leading)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text("\(dip.spo2)%")
+                        .font(.system(size: 13, weight: .heavy, design: .rounded))
+                        .foregroundStyle(Theme.textPrimary)
+                    if let context = dip.context, !context.isEmpty {
+                        Text("· \(context)")
+                            .font(.system(size: 11.5, design: .rounded))
+                            .foregroundStyle(Theme.textSecondary)
+                            .lineLimit(1)
+                    }
+                }
+                Text(dip.timestamp.formatted(.relative(presentation: .named)))
+                    .font(.system(size: 10.5, design: .rounded))
+                    .foregroundStyle(Theme.textTertiary)
             }
-            Spacer(minLength: 8)
-            Text(reading.timestamp.formatted(date: .abbreviated, time: .shortened))
-                .font(.system(size: 10.5, design: .rounded))
-                .foregroundStyle(Theme.textTertiary)
+            Spacer(minLength: 0)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
@@ -388,6 +420,37 @@ struct TrendsView: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Theme.surfaceElevated)
         )
+    }
+
+    /// Top three readings that dropped furthest below the user's personal
+    /// zone floor in the last 7 days. HR-only entries and above-zone
+    /// readings are excluded.
+    private var biggestDips: [BiggestDip] {
+        let floor = preferences.personalZoneRange.lowerBound
+        return visibleManualReadings
+            .compactMap { reading -> BiggestDip? in
+                guard let spo2 = reading.spo2 else { return nil }
+                let delta = floor - spo2
+                guard delta > 0 else { return nil }
+                return BiggestDip(
+                    id: reading.id,
+                    spo2: spo2,
+                    deltaBelowZone: delta,
+                    timestamp: reading.timestamp,
+                    context: reading.context
+                )
+            }
+            .sorted { $0.deltaBelowZone > $1.deltaBelowZone }
+            .prefix(3)
+            .map { $0 }
+    }
+
+    private struct BiggestDip: Identifiable {
+        let id: PersistentIdentifier
+        let spo2: Int
+        let deltaBelowZone: Int
+        let timestamp: Date
+        let context: String?
     }
 
     private var vo2Max: String {

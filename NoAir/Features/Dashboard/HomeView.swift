@@ -83,9 +83,48 @@ struct HomeView: View {
             if liveContext == nil {
                 await refreshContext()
             }
+            mintTodaysEarns()
             evaluateAllDoneCelebration()
             await refreshWatchStreakDays()
         }
+        // Live-mint earns + re-check celebrations whenever the user
+        // logs anything. Previously evaluateEarns only ran on cold
+        // launch + scenePhase.active, so the coin balance & streak day
+        // count would sit stale until the user backgrounded the app.
+        .onChange(of: readings.count) { _, _ in
+            mintTodaysEarns()
+            evaluateAllDoneCelebration()
+        }
+        .onChange(of: treatments.count) { _, _ in
+            mintTodaysEarns()
+            evaluateAllDoneCelebration()
+        }
+        .onChange(of: hydrationLogs.count) { _, _ in
+            mintTodaysEarns()
+            evaluateAllDoneCelebration()
+        }
+        .onChange(of: ventilations.count) { _, _ in
+            evaluateAllDoneCelebration()
+        }
+    }
+
+    /// Mint today's Oxypoints earn rows based on the current @Query
+    /// snapshot. Idempotent — OxypointsService de-dupes internally, so
+    /// calling on every save is cheap.
+    private func mintTodaysEarns() {
+        let calendar = Calendar.current
+        let takesMedication = treatments.contains { $0.type == .medication }
+        let todayReadings = readings.filter { calendar.isDateInToday($0.timestamp) }
+        let todayTreatments = treatments.filter { calendar.isDateInToday($0.timestamp) }
+        let vitals = healthDataProvider.todayVitals
+        OxypointsService(modelContext: modelContext).evaluateEarns(
+            readings: todayReadings,
+            treatments: todayTreatments,
+            hydration: hydrationLogs,
+            takesMedication: takesMedication,
+            watchSpO2Today: (vitals?.spo2SampleCount ?? 0) > 0,
+            watchHRToday: vitals?.heartRateMin != nil
+        )
     }
 
     /// Pull the last 30 days of HK daily vitals summaries and build the
@@ -875,6 +914,13 @@ struct HomeView: View {
         guard celebratedQuestKey != key else { return }
         celebratedQuestKey = key
         triggerMood(.cheer)
+        // Success-notification haptic — stronger than the .receive() cue
+        // used elsewhere so a milestone hit feels like a milestone, not
+        // just another turn. Silent on Reduce Motion via UIKit's own
+        // convention.
+        let generator = UINotificationFeedbackGenerator()
+        generator.prepare()
+        generator.notificationOccurred(.success)
         withAnimation(.easeOut(duration: 0.2)) { showConfetti = true }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.3) {
             withAnimation(.easeOut(duration: 0.4)) { showConfetti = false }
