@@ -38,8 +38,16 @@ struct OnboardingView: View {
         .onAppear(perform: startIfNeeded)
         .sheet(isPresented: $showsHealthPreAsk) {
             HealthKitPreAskSheet(onContinue: {
-                Task { await healthDataProvider.connect() }
-                afterHealthAsked(connected: true)
+                // Await the HK auth sheet to fully return before
+                // advancing onboarding. If we advanced eagerly, the
+                // next-step animation collided with iOS trying to
+                // present the auth sheet — iOS dropped the auth,
+                // user landed at "Let's go" without ever seeing the
+                // permission dialog.
+                Task { @MainActor in
+                    await healthDataProvider.connect()
+                    afterHealthAsked(connected: true)
+                }
             })
             .presentationDetents([.large])
             .presentationDragIndicator(.hidden)

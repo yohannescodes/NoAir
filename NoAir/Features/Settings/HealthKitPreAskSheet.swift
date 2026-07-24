@@ -125,8 +125,17 @@ struct HealthKitPreAskSheet: View {
     private var actionRow: some View {
         VStack(spacing: 10) {
             Button {
-                onContinue()
+                // Dismiss FIRST, THEN notify the caller — we can't
+                // present iOS's HKAuth sheet while our own pre-ask
+                // sheet is still on screen. When they race, iOS
+                // silently drops the auth sheet and the caller's
+                // "advance to next step" fires anyway, leaving the
+                // user past the Health question without ever seeing
+                // the permission dialog.
                 dismiss()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                    onContinue()
+                }
             } label: {
                 Text("Continue")
                     .font(.system(size: 15, weight: .heavy, design: .rounded))
