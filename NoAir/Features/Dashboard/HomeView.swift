@@ -12,6 +12,8 @@ struct HomeView: View {
     @Binding var selectedLogKind: LogEntryKind
     let readingEnricher: ReadingEnricher
     let preferences: UserPreferences
+    var onOpenSettings: () -> Void = {}
+    var onOpenChat: () -> Void = {}
 
     @Query(sort: \ReadingRecord.timestamp, order: .reverse) private var readings: [ReadingRecord]
     @Query(sort: \VentilationSession.startTime, order: .reverse) private var ventilations: [VentilationSession]
@@ -19,6 +21,12 @@ struct HomeView: View {
     @Query(sort: \LabResultRecord.timestamp, order: .reverse) private var labs: [LabResultRecord]
     @Query private var checkIns: [DailyCheckIn]
     @Query private var hydrationLogs: [HydrationLog]
+    @Query private var oxypointsRows: [OxypointsLedger]
+
+    /// Sum of every ledger row — Oxypoints total.
+    private var oxypointsBalance: Int {
+        oxypointsRows.reduce(0) { $0 + $1.delta }
+    }
 
     private let streakService = LoggingStreakService()
 
@@ -103,13 +111,39 @@ struct HomeView: View {
     // MARK: - Sections
 
     private var header: some View {
-        HStack {
+        HStack(spacing: 8) {
             Text("Hey, Yohannes")
                 .font(.system(size: 24, weight: .heavy, design: .rounded))
                 .foregroundStyle(Theme.textPrimary)
             Spacer()
+            oxypointsPill
             streakPill
+            Button(action: onOpenSettings) {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(Theme.textTertiary)
+                    .frame(width: 32, height: 32)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Settings")
         }
+    }
+
+    /// Oxypoints balance pill per Screens v2 §A1.
+    private var oxypointsPill: some View {
+        HStack(spacing: 5) {
+            Text("🪙").font(.system(size: 13))
+            Text("\(oxypointsBalance)")
+                .font(.system(size: 13, weight: .heavy, design: .rounded))
+                .foregroundStyle(Theme.accent)
+                .contentTransition(.numericText())
+        }
+        .padding(.horizontal, 11)
+        .padding(.vertical, 6)
+        .background(
+            Capsule().fill(Theme.accent.opacity(0.15))
+        )
+        .accessibilityLabel("\(oxypointsBalance) Oxypoints")
     }
 
     /// Emoji streak pill per screens (5, 6, 7) — flame + count in orange-tinted capsule.
@@ -132,36 +166,66 @@ struct HomeView: View {
     }
 
     private var snapshotCard: some View {
-        HStack(spacing: 14) {
-            OxyMascotView(mood: mood, size: 52, showGlow: true)
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 14) {
+                Button(action: onOpenChat) {
+                    OxyMascotView(mood: mood, size: 52, showGlow: true)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Ask Oxy")
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(zoneLabel)
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
-                    .textCase(.uppercase)
-                    .foregroundStyle(Theme.textTertiary)
-                    .tracking(0.5)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(zoneLabel)
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .textCase(.uppercase)
+                        .foregroundStyle(Theme.textTertiary)
+                        .tracking(0.5)
 
-                HStack(alignment: .lastTextBaseline, spacing: 6) {
-                    Text("\(latestSpo2Display)%")
-                        .font(.system(size: 32, weight: .heavy, design: .rounded))
-                        .foregroundStyle(Theme.textPrimary)
-                        .contentTransition(.numericText())
-                    if let pulse = latestPulse {
-                        Text("\(pulse) bpm")
-                            .font(.system(size: 13, weight: .bold, design: .rounded))
-                            .foregroundStyle(Theme.textSecondary)
+                    HStack(alignment: .lastTextBaseline, spacing: 6) {
+                        Text("\(latestSpo2Display)%")
+                            .font(.system(size: 32, weight: .heavy, design: .rounded))
+                            .foregroundStyle(Theme.textPrimary)
+                            .contentTransition(.numericText())
+                        if let pulse = latestPulse {
+                            Text("\(pulse) bpm")
+                                .font(.system(size: 13, weight: .bold, design: .rounded))
+                                .foregroundStyle(Theme.textSecondary)
+                        }
                     }
+
+                    Text(mascotHomeLine)
+                        .font(.system(size: 11.5, design: .rounded))
+                        .foregroundStyle(Theme.textSecondary)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
-                Text(mascotHomeLine)
-                    .font(.system(size: 11.5, design: .rounded))
-                    .foregroundStyle(Theme.textSecondary)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
             }
 
-            Spacer(minLength: 0)
+            Button(action: onOpenChat) {
+                HStack(spacing: 8) {
+                    Text("💬").font(.system(size: 15))
+                    Text("Ask Oxy about your readings")
+                        .font(.system(size: 13, weight: .heavy, design: .rounded))
+                        .foregroundStyle(Theme.accent)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Theme.accent)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 11)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Theme.accent.opacity(0.12))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .strokeBorder(Theme.accent.opacity(0.3), lineWidth: 1)
+                        )
+                )
+            }
+            .buttonStyle(NAPressableButtonStyle())
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -173,11 +237,6 @@ struct HomeView: View {
                         .strokeBorder(Theme.stroke, lineWidth: 1)
                 )
         )
-        .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .onTapGesture {
-            selectedLogKind = .reading
-            selectedTab = .log
-        }
     }
 
     private var energyCard: some View {

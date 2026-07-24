@@ -10,11 +10,15 @@ struct ContentView: View {
     let readingEnricher: ReadingEnricher
 
     @Query private var allPreferences: [UserPreferences]
+    @Query(sort: \ReadingRecord.timestamp, order: .reverse) private var allReadings: [ReadingRecord]
 
     @State private var selectedTab: AppTab = .home
     @State private var selectedLogKind: LogEntryKind = .reading
     @State private var timelineFilter: TimelineFilter = .all
     @State private var activeTimelineEditor: TimelineEditorRoute?
+    @State private var showsSettings = false
+    @State private var showsChat = false
+    @State private var chatSeedPrompt: String?
     @State private var didRunLaunchTasks = false
 
     var body: some View {
@@ -40,6 +44,10 @@ struct ContentView: View {
                 Task {
                     await healthDataProvider.refresh()
                     await importHealthKitMedications()
+                    if let preferences = allPreferences.first {
+                        InsightService(modelContext: modelContext, preferences: preferences)
+                            .evaluate(readings: allReadings)
+                    }
                 }
             }
         }
@@ -47,35 +55,55 @@ struct ContentView: View {
 
     private func mainApp(preferences: UserPreferences) -> some View {
         VStack(spacing: 0) {
-            ZStack {
-                switch selectedTab {
-                case .home:
-                    HomeView(
-                        selectedTab: $selectedTab,
-                        selectedLogKind: $selectedLogKind,
-                        readingEnricher: readingEnricher,
-                        preferences: preferences
-                    )
-                case .log:
-                    QuickLogView(
-                        selectedTab: $selectedTab,
-                        selectedLogKind: $selectedLogKind,
-                        timelineFilter: $timelineFilter,
-                        activeTimelineEditor: $activeTimelineEditor,
-                        readingEnricher: readingEnricher,
-                        preferences: preferences
-                    )
-                case .trends:
-                    TrendsView(preferences: preferences)
-                case .timeline:
-                    TimelineView(filter: $timelineFilter, activeEditor: $activeTimelineEditor)
+            ZStack(alignment: .bottom) {
+                Group {
+                    switch selectedTab {
+                    case .home:
+                        HomeView(
+                            selectedTab: $selectedTab,
+                            selectedLogKind: $selectedLogKind,
+                            readingEnricher: readingEnricher,
+                            preferences: preferences,
+                            onOpenSettings: { showsSettings = true },
+                            onOpenChat: {
+                                chatSeedPrompt = nil
+                                showsChat = true
+                            }
+                        )
+                    case .log:
+                        QuickLogView(
+                            selectedTab: $selectedTab,
+                            selectedLogKind: $selectedLogKind,
+                            timelineFilter: $timelineFilter,
+                            activeTimelineEditor: $activeTimelineEditor,
+                            readingEnricher: readingEnricher,
+                            preferences: preferences
+                        )
+                    case .trends:
+                        TrendsView(preferences: preferences)
+                    case .timeline:
+                        TimelineView(filter: $timelineFilter, activeEditor: $activeTimelineEditor)
+                    }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                InsightPillView(onAskMore: { insight in
+                    chatSeedPrompt = insight.body
+                    showsChat = true
+                })
+                .padding(.horizontal, 14)
+                .padding(.bottom, 8)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             NABottomTabBar(selection: $selectedTab)
         }
         .background(Theme.background.ignoresSafeArea())
+        .sheet(isPresented: $showsSettings) {
+            SettingsView(preferences: preferences)
+        }
+        .fullScreenCover(isPresented: $showsChat) {
+            ChatView(preferences: preferences)
+        }
     }
 
     // MARK: - Launch orchestration
@@ -87,14 +115,19 @@ struct ContentView: View {
     }
 
     /// Runs once per process launch: legacy migrations + first HealthKit
-    /// data refresh + medication import. Guarded so scene reactivations
-    /// don't re-run the migration pass on every foreground.
+    /// data refresh + medication import + insight evaluation. Guarded so
+    /// scene reactivations don't re-run the migration pass on every
+    /// foreground.
     private func runLaunchTasksIfNeeded() async {
         guard !didRunLaunchTasks else { return }
         didRunLaunchTasks = true
         LegacyMigrator.run(context: modelContext)
         await healthDataProvider.refresh()
         await importHealthKitMedications()
+        if let preferences = allPreferences.first {
+            InsightService(modelContext: modelContext, preferences: preferences)
+                .evaluate(readings: allReadings)
+        }
     }
 
     private func importHealthKitMedications() async {
