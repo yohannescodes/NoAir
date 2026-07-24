@@ -137,16 +137,8 @@ struct QuickLogView: View {
         case .water:
             WaterCaptureCard(
                 preferences: preferences,
-                onLog: { total in
-                    // Water uses +/- taps — don't collapse the tile, just
-                    // show a lightweight toast + haptic per tap.
-                    savedNote = "Logged. \(total)/\(preferences.targetMl) ml today."
-                    saveTick &+= 1
-                    let ticket = saveTick
-                    Task { @MainActor in
-                        try? await Task.sleep(nanoseconds: 1_600_000_000)
-                        if ticket == saveTick { savedNote = nil }
-                    }
+                onDone: { total in
+                    confirmSave("Water logged. \(total)/\(preferences.targetMl) ml today.")
                 }
             )
             .transition(.opacity.combined(with: .move(edge: .top)))
@@ -1284,23 +1276,33 @@ private struct WaterCaptureCard: View {
     @Query private var hydrationLogs: [HydrationLog]
 
     let preferences: UserPreferences
-    /// Called with the new ml total after each save.
-    let onLog: (Int) -> Void
+    /// Called once the user taps Done, with the day's new ml total.
+    let onDone: (Int) -> Void
+
+    /// Amount added in *this* session (all + taps minus - taps). Rolls back
+    /// to zero when the card opens so the user can see what they're about
+    /// to log before committing with Done.
+    @State private var pendingMl: Int = 0
+    /// Custom size chosen from the size picker sheet. Nil = use the
+    /// user's default increment step.
+    @State private var showsSizePicker = false
 
     private var todayLog: HydrationLog? {
         let start = Calendar.current.startOfDay(for: .now)
         return hydrationLogs.first { $0.day == start }
     }
 
-    private var currentMl: Int { todayLog?.ml ?? 0 }
+    private var alreadyLoggedMl: Int { todayLog?.ml ?? 0 }
+    private var previewMl: Int { max(0, alreadyLoggedMl + pendingMl) }
     private var target: Int { todayLog?.targetMl ?? preferences.targetMl }
-    private var progress: Double { min(1, Double(currentMl) / Double(max(1, target))) }
+    private var progress: Double { min(1, Double(previewMl) / Double(max(1, target))) }
+    private var stepMl: Int { preferences.hydrationUnit.incrementStepMl }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .bottom, spacing: 8) {
                 OxyMascotView(mood: .calm, size: 30, showGlow: false)
-                Text("Had some water? Add what you drank.")
+                Text("Had some water? Tap to build up what you drank, then Done.")
                     .font(.system(size: 12.5, design: .rounded))
                     .foregroundStyle(Theme.textPrimary)
                     .padding(.horizontal, 13)
@@ -1326,13 +1328,21 @@ private struct WaterCaptureCard: View {
                     .foregroundStyle(Theme.textTertiary)
 
                 HStack(alignment: .lastTextBaseline, spacing: 4) {
-                    Text("\(displayValue(currentMl))")
+                    Text(displayValue(previewMl))
                         .font(.system(size: 44, weight: .heavy, design: .rounded))
                         .foregroundStyle(Theme.accent)
                         .contentTransition(.numericText())
                     Text("/ \(displayValue(target)) \(preferences.hydrationUnit.shortLabel)")
                         .font(.system(size: 16, weight: .bold, design: .rounded))
                         .foregroundStyle(Theme.textSecondary)
+                }
+
+                if pendingMl != 0 {
+                    Text(pendingMl > 0
+                         ? "About to add \(displayValue(pendingMl)) \(preferences.hydrationUnit.shortLabel)"
+                         : "About to remove \(displayValue(-pendingMl)) \(preferences.hydrationUnit.shortLabel)")
+                        .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                        .foregroundStyle(Theme.accent)
                 }
 
                 ProgressBar(progress: progress)
@@ -1343,31 +1353,89 @@ private struct WaterCaptureCard: View {
                     .foregroundStyle(Theme.textTertiary)
                     .multilineTextAlignment(.center)
 
+                // Primary +size button dominates the row. `−` is undo for
+                // this session only; the redundant trailing `+` chip was
+                // removed because it did the same thing as the primary.
                 HStack(spacing: 12) {
-                    circleStepper(symbol: "minus") { add(-preferences.hydrationUnit.incrementStepMl) }
+                    undoButton
                     Button {
-                        add(preferences.hydrationUnit.incrementStepMl)
+                        pendingMl += stepMl
                     } label: {
-                        Text("+ \(displayValue(preferences.hydrationUnit.incrementStepMl)) \(preferences.hydrationUnit.shortLabel)")
-                            .font(.system(size: 14, weight: .heavy, design: .rounded))
-                            .foregroundStyle(Theme.onAccent)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .fill(Theme.accent)
-                            )
-                            .shadow(color: Theme.accentEdge, radius: 0, x: 0, y: 4)
+                        HStack(spacing: 6) {
+                            Image(systemName: "plus")
+                                .font(.system(size: 14, weight: .heavy))
+                            Text("\(displayValue(stepMl)) \(preferences.hydrationUnit.shortLabel)")
+                                .font(.system(size: 14, weight: .heavy, design: .rounded))
+                        }
+                        .foregroundStyle(Theme.onAccent)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(Theme.accent)
+                        )
                     }
                     .buttonStyle(NAPressableButtonStyle())
-                    circleStepper(symbol: "plus") { add(preferences.hydrationUnit.incrementStepMl) }
+                    .accessibilityLabel("Add \(displayValue(stepMl)) \(preferences.hydrationUnit.shortLabel)")
                 }
-                .padding(.top, 2)
+
+                // Custom size row: quick pick for common glass/bottle sizes
+                // so the user isn't stuck with the default step.
+                HStack(spacing: 8) {
+                    ForEach(quickSizesMl, id: \.self) { size in
+                        sizeChip(ml: size)
+                    }
+                }
             }
             .padding(20)
             .frame(maxWidth: .infinity)
             .background(cardBackground)
+
+            Button("Done", action: commit)
+                .buttonStyle(NAPrimaryButtonStyle())
+                .disabled(pendingMl == 0)
+                .opacity(pendingMl == 0 ? 0.5 : 1)
         }
+    }
+
+    /// Common vessel sizes in ml. Cups menu offers slightly different
+    /// picks but same underlying add.
+    private var quickSizesMl: [Int] {
+        preferences.hydrationUnit == .cup ? [120, 240, 360, 480] : [100, 250, 500, 750]
+    }
+
+    private func sizeChip(ml: Int) -> some View {
+        Button {
+            pendingMl += ml
+        } label: {
+            Text("+\(displayValue(ml))")
+                .font(.system(size: 11.5, weight: .bold, design: .rounded))
+                .foregroundStyle(Theme.textSecondary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .frame(maxWidth: .infinity)
+                .background(
+                    Capsule().strokeBorder(Theme.stroke, lineWidth: 1.5)
+                )
+        }
+        .buttonStyle(NAPressableButtonStyle())
+        .accessibilityLabel("Quick add \(displayValue(ml)) \(preferences.hydrationUnit.shortLabel)")
+    }
+
+    private var undoButton: some View {
+        Button {
+            pendingMl = max(-alreadyLoggedMl, pendingMl - stepMl)
+        } label: {
+            Image(systemName: "minus")
+                .font(.system(size: 20, weight: .heavy))
+                .foregroundStyle(Theme.textPrimary)
+                .frame(width: 52, height: 52)
+                .background(
+                    Circle().fill(Theme.surfaceElevated)
+                )
+        }
+        .buttonStyle(NAPressableButtonStyle())
+        .accessibilityLabel("Undo last \(displayValue(stepMl))")
     }
 
     private func displayValue(_ ml: Int) -> String {
@@ -1377,33 +1445,26 @@ private struct WaterCaptureCard: View {
         }
     }
 
-    private func circleStepper(symbol: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 20, weight: .heavy))
-                .foregroundStyle(Theme.textPrimary)
-                .frame(width: 52, height: 52)
-                .background(
-                    Circle().fill(Theme.surfaceElevated)
-                )
-        }
-        .buttonStyle(NAPressableButtonStyle())
-    }
-
-    private func add(_ deltaMl: Int) {
+    /// Commit the pending delta as a single HydrationLog write. Done as
+    /// one save so the timeline doesn't fragment into a burst of tap-sized
+    /// rows.
+    private func commit() {
+        guard pendingMl != 0 else { return }
         let start = Calendar.current.startOfDay(for: .now)
         if let existing = todayLog {
-            if deltaMl >= 0 {
-                existing.addMl(deltaMl)
+            if pendingMl >= 0 {
+                existing.addMl(pendingMl)
             } else {
-                existing.subtractMl(-deltaMl)
+                existing.subtractMl(-pendingMl)
             }
-        } else if deltaMl > 0 {
-            let log = HydrationLog(day: start, ml: deltaMl, targetMl: preferences.targetMl)
+        } else if pendingMl > 0 {
+            let log = HydrationLog(day: start, ml: pendingMl, targetMl: preferences.targetMl)
             modelContext.insert(log)
         }
         try? modelContext.save()
-        onLog(todayLog?.ml ?? deltaMl)
+        let total = todayLog?.ml ?? max(0, pendingMl)
+        pendingMl = 0
+        onDone(total)
     }
 }
 
