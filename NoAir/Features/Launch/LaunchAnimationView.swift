@@ -46,6 +46,12 @@ struct LaunchAnimationView: View {
     // Reveal state
     @State private var showsShadow = false
     @State private var showsWordmark = false
+    /// Flips true once the scattered wordmark starts converging into
+    /// its final position. Kept separate from `showsWordmark` because
+    /// the container needs to be visible (opacity 1) BEFORE the
+    /// per-letter spring, otherwise the letters spring in already
+    /// invisible and pop into view.
+    @State private var convergedWordmark = false
     @State private var dismissed = false
 
     private let rollDuration: Double = 1.4
@@ -82,13 +88,16 @@ struct LaunchAnimationView: View {
                     .scaleEffect(breathScale)
                     .position(x: center.width, y: center.height)
 
-                // Wordmark below the mascot.
-                Text("Oxylittle")
-                    .font(.system(size: 15, weight: .heavy, design: .rounded))
-                    .foregroundStyle(Theme.textSecondary)
-                    .tracking(0.6)
-                    .opacity(showsWordmark ? 1 : 0)
-                    .position(x: center.width, y: center.height + 106)
+                // Wordmark below the mascot — Pixar-style "scattered
+                // letters converge into place". Each character starts
+                // offset + rotated + invisible and springs into its
+                // home slot in a staggered sequence.
+                ScatterConvergeWordmark(
+                    text: "Oxylittle",
+                    converged: convergedWordmark
+                )
+                .opacity(showsWordmark ? 1 : 0)
+                .position(x: center.width, y: center.height + 106)
             }
             .opacity(dismissed ? 0 : 1)
             .onAppear { runSequence() }
@@ -104,6 +113,7 @@ struct LaunchAnimationView: View {
             bounced = true
             showsShadow = true
             showsWordmark = true
+            convergedWordmark = true
             DispatchQueue.main.asyncAfter(deadline: .now() + totalDuration - dismissDuration) {
                 dismiss()
             }
@@ -130,8 +140,18 @@ struct LaunchAnimationView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + rollDuration) {
             withAnimation(.easeIn(duration: 0.5)) {
                 showsShadow = true
+                // Wordmark container visible; letters still scattered.
                 showsWordmark = true
             }
+        }
+
+        // Small beat after the container appears so the scattered
+        // state registers, then letters spring into place. The spring
+        // + per-letter stagger lives inside ScatterConvergeWordmark's
+        // .animation(...) modifier, so no withAnimation wrap here.
+        let convergeStart = rollDuration + 0.25
+        DispatchQueue.main.asyncAfter(deadline: .now() + convergeStart) {
+            convergedWordmark = true
         }
 
         let breatheStart = rollDuration + catchBreathPause
@@ -192,6 +212,71 @@ struct LaunchAnimationView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + dismissDuration) {
             onDone()
         }
+    }
+}
+
+/// Pixar-style scatter-to-converge wordmark used by LaunchAnimationView.
+///
+/// Renders each character as its own view. When `converged == false`
+/// each character sits at a deterministic per-index random offset +
+/// rotation with 0 opacity. Flipping `converged` to true snaps each
+/// character to its home slot (offset zero, rotation zero, opacity 1)
+/// — wrap the flip in `withAnimation(.interpolatingSpring…)` at the
+/// caller for the springy "click into place" feel.
+///
+/// Offsets are seeded on the character index (not `Math.random`) so
+/// the layout is deterministic across renders — SwiftUI Previews and
+/// unit-test snapshots stay stable.
+private struct ScatterConvergeWordmark: View {
+    let text: String
+    let converged: Bool
+
+    var body: some View {
+        HStack(spacing: 1) {
+            ForEach(Array(text.enumerated()), id: \.offset) { index, character in
+                Text(String(character))
+                    .font(.system(size: 15, weight: .heavy, design: .rounded))
+                    .foregroundStyle(Theme.textSecondary)
+                    .tracking(0.6)
+                    .offset(
+                        x: converged ? 0 : scatterOffsetX(for: index),
+                        y: converged ? 0 : scatterOffsetY(for: index)
+                    )
+                    .rotationEffect(.degrees(converged ? 0 : scatterRotation(for: index)))
+                    .opacity(converged ? 1 : 0)
+                    // Per-letter stagger so they snap in one after
+                    // another instead of all at the same instant.
+                    .animation(
+                        .interpolatingSpring(stiffness: 140, damping: 11)
+                            .delay(Double(index) * 0.05),
+                        value: converged
+                    )
+            }
+        }
+    }
+
+    // MARK: - Deterministic scatter
+
+    /// Deterministic pseudo-random in [-1, 1] seeded on (index, salt).
+    /// Uses the fractional part of `sin(seed) * 43758.5453` — the
+    /// classic shader-style hash. Two salts per index give us
+    /// independent x/y/rotation without a real RNG.
+    private func hash(_ index: Int, salt: Int) -> Double {
+        let seed = Double(index) * 12.9898 + Double(salt) * 78.233
+        let raw = sin(seed) * 43_758.5453
+        return (raw - raw.rounded(.down)) * 2 - 1
+    }
+
+    private func scatterOffsetX(for index: Int) -> CGFloat {
+        CGFloat(hash(index, salt: 1)) * 90
+    }
+
+    private func scatterOffsetY(for index: Int) -> CGFloat {
+        CGFloat(hash(index, salt: 2)) * 42
+    }
+
+    private func scatterRotation(for index: Int) -> Double {
+        hash(index, salt: 3) * 60
     }
 }
 
