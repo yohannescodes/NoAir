@@ -364,6 +364,13 @@ struct OnboardingView: View {
     }
 
     private func push(_ message: OnboardingBubble) {
+        // Same conversational cue as the Chat modal: user taps → send,
+        // Oxy speaks → receive. Makes onboarding feel like the same
+        // conversation the app carries forward, not a form.
+        switch message.source {
+        case .user: ChatFeedback.send()
+        case .mascot: ChatFeedback.receive()
+        }
         withAnimation(.spring(duration: 0.35, bounce: 0.25)) {
             chat.append(message)
         }

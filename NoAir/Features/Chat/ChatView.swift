@@ -455,6 +455,12 @@ struct ChatView: View {
     /// Reveal the reply chunk by chunk so it feels streamed. Splits by word
     /// with a short delay per chunk — no real SSE, but visually identical
     /// for chat-length replies.
+    ///
+    /// **Do not replace with instant paste.** The pacing is deliberate:
+    /// it buys the user time to read attentively, and matches the
+    /// conversational rhythm we've set elsewhere (onboarding push, chat
+    /// send/receive). A "real" SSE upgrade should preserve the same
+    /// perceived cadence, not shave it.
     @MainActor
     private func streamIntoBubble(_ full: String, placeholder: ChatMessage) async {
         let words = full.split(separator: " ", omittingEmptySubsequences: false)
