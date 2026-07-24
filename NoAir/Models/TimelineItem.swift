@@ -8,6 +8,7 @@ struct TimelineItem: Identifiable {
     let subtitle: String
     let value: String
     let systemImage: String
+    let emojiGlyph: String
     let tint: Color
     let reference: TimelineEventReference?
 
@@ -19,6 +20,7 @@ struct TimelineItem: Identifiable {
         subtitle = TimelineItem.watchSubtitle(for: watchSummary)
         value = watchSummary.spo2SampleCount > 0 ? "\(watchSummary.spo2SampleCount) samples" : "HR only"
         systemImage = "applewatch"
+        emojiGlyph = "⌚"
         tint = Theme.watch
         reference = nil
     }
@@ -29,8 +31,15 @@ struct TimelineItem: Identifiable {
         filter = .readings
         title = "Reading"
         subtitle = reading.context?.isEmpty == false ? reading.context ?? "" : "Manual log"
-        value = "\(reading.spo2)%"
+        if let spo2 = reading.spo2 {
+            value = "\(spo2)%"
+        } else if let pulse = reading.pulse {
+            value = "\(pulse) bpm"
+        } else {
+            value = "—"
+        }
         systemImage = "waveform.path.ecg"
+        emojiGlyph = "💧"
         tint = Theme.reading
         reference = .reading(reading)
     }
@@ -43,6 +52,7 @@ struct TimelineItem: Identifiable {
         subtitle = TimelineItem.ventilationSubtitle(for: ventilation)
         value = ventilation.durationMinutes.map { "\($0)m" } ?? "Open"
         systemImage = "wind"
+        emojiGlyph = "🫁"
         tint = Theme.ventilation
         reference = .ventilation(ventilation)
     }
@@ -55,8 +65,22 @@ struct TimelineItem: Identifiable {
         subtitle = treatment.note
         value = "Treatment"
         systemImage = "cross.vial"
+        emojiGlyph = "💊"
         tint = Theme.treatment
         reference = .treatment(treatment)
+    }
+
+    init(journal: JournalEntry) {
+        id = "journal-\(journal.id.uuidString)"
+        date = journal.timestamp
+        filter = .notes
+        title = "Note"
+        subtitle = journal.text
+        value = ""
+        systemImage = "note.text"
+        emojiGlyph = "📝"
+        tint = Theme.textSecondary
+        reference = .journal(journal)
     }
 
     init(lab: LabResultRecord) {
@@ -67,6 +91,7 @@ struct TimelineItem: Identifiable {
         subtitle = lab.referenceRange?.isEmpty == false ? "Ref \(lab.referenceRange ?? "")" : "Lab result"
         value = "\(lab.value.formatted()) \(lab.unit)"
         systemImage = "testtube.2"
+        emojiGlyph = "🧪"
         tint = Theme.lab
         reference = .lab(lab)
     }

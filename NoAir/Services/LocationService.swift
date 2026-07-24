@@ -15,7 +15,15 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
     }
 
     func currentLocation() async -> LocationSnapshot? {
-        guard CLLocationManager.locationServicesEnabled() else {
+        // `CLLocationManager.locationServicesEnabled()` is a synchronous
+        // type method that IPC-round-trips through the location daemon;
+        // Apple's runtime warns whenever it's called on the main thread
+        // ("This method can cause UI unresponsiveness"). Hop off with
+        // Task.detached and await the result on the way back.
+        let servicesEnabled = await Task.detached(priority: .userInitiated) {
+            CLLocationManager.locationServicesEnabled()
+        }.value
+        guard servicesEnabled else {
             return nil
         }
 

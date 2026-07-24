@@ -17,6 +17,7 @@ struct GeminiCommentaryPromptBuilder {
         ventilations: [VentilationSession],
         treatments: [TreatmentEvent],
         labs: [LabResultRecord],
+        journals: [JournalEntry] = [],
         watch: WatchVitalsPromptContext? = nil
     ) -> String {
         let insights = HealthInsightsSnapshot(
@@ -29,6 +30,7 @@ struct GeminiCommentaryPromptBuilder {
         let recentVentilations = Array(ventilations.prefix(8))
         let recentTreatments = Array(treatments.prefix(8))
         let recentLabs = Array(labs.prefix(10))
+        let recentJournals = Array(journals.prefix(15))
 
         let readingsBlock = recentReadings.isEmpty
             ? "No readings logged yet."
@@ -46,6 +48,10 @@ struct GeminiCommentaryPromptBuilder {
             ? "No lab results logged."
             : recentLabs.map(labLine).joined(separator: "\n")
 
+        let journalBlock = recentJournals.isEmpty
+            ? "No free-form notes logged."
+            : recentJournals.map(journalLine).joined(separator: "\n")
+
         let insightBlock = insights.insights.isEmpty
             ? "No computed insights yet."
             : insights.insights.map { "- \($0)" }.joined(separator: "\n")
@@ -53,7 +59,7 @@ struct GeminiCommentaryPromptBuilder {
         let watchBlock = watch.map(watchVitalsBlock) ?? "Apple Health is not connected; no passive watch data available."
 
         return """
-        You are writing a non-clinical commentary for NoAir, a personal respiratory logbook.
+        You are writing a non-clinical commentary for Oxylittle, a personal respiratory logbook.
 
         Your job:
         - describe patterns, changes, correlations, missing context, and noteworthy clusters
@@ -90,7 +96,15 @@ struct GeminiCommentaryPromptBuilder {
 
         Recent lab results:
         \(labsBlock)
+
+        Recent free-form notes (natural-language context the user wrote in their own words — treat as ground truth for what happened, how it felt, or what they were told):
+        \(journalBlock)
         """
+    }
+
+    private func journalLine(_ entry: JournalEntry) -> String {
+        let stamp = entry.timestamp.formatted(date: .abbreviated, time: .shortened)
+        return "- [\(stamp)] \(entry.text)"
     }
 
     private func watchVitalsBlock(_ watch: WatchVitalsPromptContext) -> String {
@@ -149,7 +163,7 @@ struct GeminiCommentaryPromptBuilder {
     private func readingLine(_ reading: ReadingRecord) -> String {
         let fields = [
             "time=\(reading.timestamp.formatted(date: .abbreviated, time: .shortened))",
-            "spo2=\(reading.spo2)%",
+            reading.spo2.map { "spo2=\($0)%" },
             reading.pulse.map { "pulse=\($0)bpm" },
             reading.context.map { "context=\($0)" },
             !reading.symptoms.isEmpty ? "symptoms=\(reading.symptoms.joined(separator: ", "))" : nil,

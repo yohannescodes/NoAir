@@ -34,7 +34,11 @@ struct LabResultEditorSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NABrandNavBar(
+            title: "Edit Lab",
+            leading: .cancel { dismiss() },
+            trailing: .primary("Save", action: save)
+        ) {
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.xl) {
                     NACard(title: "Lab Result", systemImage: "testtube.2", iconTint: Theme.lab) {
@@ -88,19 +92,8 @@ struct LabResultEditorSheet: View {
                 }
                 .padding()
             }
-            .background(Theme.background)
             .scrollDismissesKeyboard(.interactively)
-            .navigationTitle("Edit Lab")
-            .navigationBarTitleDisplayMode(.inline)
             .keyboardDoneToolbar(focus: $focusedField)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", action: dismiss.callAsFunction)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save", action: save)
-                }
-            }
         }
         .presentationDragIndicator(.visible)
         .presentationBackground(Theme.background)

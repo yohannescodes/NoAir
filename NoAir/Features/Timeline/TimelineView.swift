@@ -1,6 +1,9 @@
 import SwiftData
 import SwiftUI
 
+/// Timeline (screen 12): inline title, filter chip row, compact 16pt-radius
+/// rows with per-kind glyph. Rows are still tappable-to-edit and swipeable
+/// via a native context menu.
 struct TimelineView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(HealthKitService.self) private var healthKitService
@@ -15,87 +18,171 @@ struct TimelineView: View {
     @Query(sort: \VentilationSession.startTime, order: .reverse) private var ventilations: [VentilationSession]
     @Query(sort: \TreatmentEvent.timestamp, order: .reverse) private var treatments: [TreatmentEvent]
     @Query(sort: \LabResultRecord.timestamp, order: .reverse) private var labs: [LabResultRecord]
+    @Query(sort: \JournalEntry.timestamp, order: .reverse) private var journalEntries: [JournalEntry]
 
     var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    VStack(alignment: .leading, spacing: Spacing.sm) {
-                        Text("Filter")
-                            .font(Typography.captionEmphasized)
-                            .foregroundStyle(Theme.textSecondary)
-                            .textCase(.uppercase)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Timeline")
+                    .font(.system(size: 22, weight: .heavy, design: .rounded))
+                    .foregroundStyle(Theme.textPrimary)
 
-                        NAChipBar(
-                            options: TimelineFilter.allCases,
-                            selection: $filter
-                        ) { filter in
-                            filter.rawValue
-                        }
-                    }
-                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-                    .listRowBackground(Color.clear)
-                }
+                filterChipRow
 
                 if filteredItems.isEmpty {
-                    Section {
+                    if mergedItems.isEmpty {
+                        // §H2: first-run — never any data yet
+                        VStack(spacing: 14) {
+                            OxyMascotView(mood: .calm, size: 72)
+                                .padding(.top, 20)
+                            Text("Your story starts here")
+                                .font(.system(size: 18, weight: .heavy, design: .rounded))
+                                .foregroundStyle(Theme.textPrimary)
+                            Text("Everything you log — readings, treatments, journal notes — lands here in order.")
+                                .font(.system(size: 13, design: .rounded))
+                                .foregroundStyle(Theme.textSecondary)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 22)
+                        }
+                        .padding(.vertical, 24)
+                        .frame(maxWidth: .infinity)
+                        .background(
+                            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                .fill(Theme.surface)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                        .strokeBorder(Theme.stroke, lineWidth: 1)
+                                )
+                        )
+                    } else {
+                        // Filter matches nothing but there is data elsewhere.
                         Text("No events match the current filter yet.")
                             .font(Typography.body)
                             .foregroundStyle(Theme.textSecondary)
-                            .listRowBackground(
-                                RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
+                            .padding(16)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
                                     .fill(Theme.surface)
                             )
                     }
                 } else {
                     ForEach(sectionDates, id: \.self) { date in
-                        Section(date.formatted(date: .abbreviated, time: .omitted)) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(date.formatted(date: .abbreviated, time: .omitted))
+                                .font(.system(size: 11, weight: .heavy, design: .rounded))
+                                .foregroundStyle(Theme.textTertiary)
+                                .textCase(.uppercase)
+                                .tracking(0.4)
+                                .padding(.top, 4)
+
                             ForEach(groupedItems[date] ?? []) { item in
-                                Group {
-                                    if item.reference == nil {
-                                        TimelineEntryRowView(item: item)
-                                            .opacity(0.7)
-                                    } else {
-                                        Button(action: { startEditing(item) }) {
-                                            TimelineEntryRowView(item: item)
-                                        }
-                                        .buttonStyle(.plain)
-                                        .swipeActions {
-                                            Button("Delete", role: .destructive) {
-                                                delete(item)
-                                            }
-                                        }
+                                if item.reference == nil {
+                                    row(item)
+                                        .opacity(0.7)
+                                } else {
+                                    Button(action: { startEditing(item) }) {
+                                        row(item)
+                                    }
+                                    .buttonStyle(NAPressableButtonStyle())
+                                    .contextMenu {
+                                        Button("Delete", role: .destructive) { delete(item) }
                                     }
                                 }
-                                .listRowBackground(
-                                    RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
-                                        .fill(Theme.surface)
-                                        .padding(.vertical, 2)
-                                )
                             }
                         }
                     }
                 }
             }
-            .scrollContentBackground(.hidden)
-            .background(Theme.background)
-            .navigationTitle("Timeline")
-            .task {
-                watchSummaries = await healthDataProvider.dailySummaries(days: 14)
+            .padding(.top, 16)
+            .padding(.horizontal, 18)
+            .padding(.bottom, 24)
+        }
+        .background(Theme.background.ignoresSafeArea())
+        .task {
+            watchSummaries = await healthDataProvider.dailySummaries(days: 14)
+        }
+        .sheet(item: $activeEditor) { route in
+            switch route {
+            case let .reading(reading):
+                ReadingEditorSheet(reading: reading)
+            case let .ventilation(ventilation):
+                VentilationEditorSheet(session: ventilation)
+            case let .treatment(treatment):
+                TreatmentEditorSheet(treatment: treatment)
+            case let .lab(lab):
+                LabResultEditorSheet(labResult: lab)
+            case let .journal(entry):
+                JournalEntryEditorSheet(entry: entry)
             }
-            .sheet(item: $activeEditor) { route in
-                switch route {
-                case let .reading(reading):
-                    ReadingEditorSheet(reading: reading)
-                case let .ventilation(ventilation):
-                    VentilationEditorSheet(session: ventilation)
-                case let .treatment(treatment):
-                    TreatmentEditorSheet(treatment: treatment)
-                case let .lab(lab):
-                    LabResultEditorSheet(labResult: lab)
+        }
+    }
+
+    private var filterChipRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(TimelineFilter.allCases) { option in
+                    filterChip(option)
                 }
             }
         }
+    }
+
+    private func filterChip(_ option: TimelineFilter) -> some View {
+        let selected = filter == option
+        return Button {
+            filter = option
+        } label: {
+            Text(option.rawValue)
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .foregroundStyle(selected ? Theme.onAccent : Theme.textSecondary)
+                .padding(.horizontal, 13)
+                .padding(.vertical, 8)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(selected ? Theme.accent : Theme.surfaceElevated)
+                )
+        }
+        .buttonStyle(NAPressableButtonStyle())
+    }
+
+    private func row(_ item: TimelineItem) -> some View {
+        HStack(spacing: 12) {
+            Text(item.emojiGlyph)
+                .font(.system(size: 15))
+                .frame(width: 32, height: 32)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(item.tint.opacity(0.15))
+                )
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.title)
+                    .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                    .foregroundStyle(Theme.textPrimary)
+                Text(item.date.formatted(date: .abbreviated, time: .shortened))
+                    .font(.system(size: 10.5, design: .rounded))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+
+            Spacer(minLength: 0)
+
+            if !item.value.isEmpty {
+                Text(item.value)
+                    .font(.system(size: 14, weight: .heavy, design: .rounded))
+                    .foregroundStyle(item.tint)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Theme.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .strokeBorder(Theme.stroke, lineWidth: 1)
+                )
+        )
     }
 
     @MainActor
@@ -105,8 +192,8 @@ struct TimelineView: View {
             ventilations.map(TimelineItem.init(ventilation:)) +
             treatments.map(TimelineItem.init(treatment:)) +
             labs.map(TimelineItem.init(lab:)) +
+            journalEntries.map(TimelineItem.init(journal:)) +
             watchSummaries.map(TimelineItem.init(watchSummary:))
-
         return items.sorted { $0.date > $1.date }
     }
 
@@ -136,6 +223,8 @@ struct TimelineView: View {
             activeEditor = .treatment(treatment)
         case let .lab(lab):
             activeEditor = .lab(lab)
+        case let .journal(entry):
+            activeEditor = .journal(entry)
         case nil:
             break
         }
@@ -158,10 +247,11 @@ struct TimelineView: View {
             modelContext.delete(treatment)
         case let .lab(lab):
             modelContext.delete(lab)
+        case let .journal(entry):
+            modelContext.delete(entry)
         case nil:
             return
         }
-
         try? modelContext.save()
     }
 }

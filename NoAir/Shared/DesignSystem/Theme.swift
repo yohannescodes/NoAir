@@ -1,93 +1,110 @@
 import SwiftUI
 import UIKit
 
-/// Semantic colors for the app. Every color adapts to light/dark via trait-based
-/// dynamic UIColors so the whole app works in both appearances.
+/// Semantic color tokens.
+///
+/// Oxylittle ships a single dark appearance — there is no light mode. Every
+/// token below is a fixed dark value pulled from `NoAir Design System.dc.html`
+/// §1-§3. The whole app is force-dark at the root via
+/// `preferredColorScheme(.dark)`, so these values also render correctly when
+/// the device is set to Light system-wide.
 enum Theme {
-    // MARK: - Base surfaces
+    // MARK: - Base surfaces (§1)
 
-    /// Screen background.
-    static let background = dynamic(light: UIColor(red: 0.96, green: 0.97, blue: 0.98, alpha: 1),
-                                    dark: UIColor(red: 0.05, green: 0.07, blue: 0.10, alpha: 1))
+    /// Screen background — `#0D1219`.
+    static let background = fixed(0x0D1219)
 
-    /// Card / tile surface sitting on the background.
-    static let surface = dynamic(light: .white,
-                                 dark: UIColor(red: 0.10, green: 0.13, blue: 0.17, alpha: 1))
+    /// Card / tile surface sitting on the background — `#1A212B`.
+    static let surface = fixed(0x1A212B)
 
-    /// Surface stacked on another surface (inputs inside cards, nested tiles).
-    static let surfaceElevated = dynamic(light: UIColor(red: 0.94, green: 0.95, blue: 0.97, alpha: 1),
-                                         dark: UIColor(red: 0.15, green: 0.19, blue: 0.24, alpha: 1))
+    /// Surface stacked on another surface (nested tiles, toggles-off) — `#26303D`.
+    static let surfaceElevated = fixed(0x26303D)
 
-    /// Hairline stroke around surfaces.
-    static let stroke = dynamic(light: UIColor(red: 0.88, green: 0.90, blue: 0.93, alpha: 1),
-                                dark: UIColor(white: 1, alpha: 0.09))
+    /// Text fields inside cards — `#151B23`. Slightly darker than surface so
+    /// the input inset reads as "sunken in".
+    static let surfaceInput = fixed(0x151B23)
+
+    /// Hairline stroke around surfaces — `rgba(255,255,255,.09)`.
+    static let stroke = Color(uiColor: UIColor(white: 1, alpha: 0.09))
 
     // MARK: - Text
 
-    static let textPrimary = dynamic(light: UIColor(red: 0.09, green: 0.12, blue: 0.16, alpha: 1),
-                                     dark: UIColor(white: 0.96, alpha: 1))
+    /// Headings, values — `#F5F7F8`.
+    static let textPrimary = fixed(0xF5F7F8)
 
-    static let textSecondary = dynamic(light: UIColor(red: 0.40, green: 0.45, blue: 0.52, alpha: 1),
-                                       dark: UIColor(white: 0.70, alpha: 1))
+    /// Body, subtitles — `#B6C0CA`.
+    static let textSecondary = fixed(0xB6C0CA)
 
-    static let textTertiary = dynamic(light: UIColor(red: 0.58, green: 0.63, blue: 0.69, alpha: 1),
-                                      dark: UIColor(white: 0.48, alpha: 1))
+    /// Captions, hints, inactive tab — `#8996A3`.
+    static let textTertiary = fixed(0x8996A3)
 
-    // MARK: - Brand
+    // MARK: - Brand (§2)
 
-    /// Primary accent — the app's mint identity, tuned per appearance.
-    static let accent = dynamic(light: UIColor(red: 0.00, green: 0.65, blue: 0.58, alpha: 1),
-                                dark: UIColor(red: 0.25, green: 0.87, blue: 0.76, alpha: 1))
+    /// Primary accent — mint identity `#40DEC2`.
+    static let accent = fixed(0x40DEC2)
 
-    /// Text/icon color that sits ON accent-filled surfaces (buttons, selected
-    /// chips). The dark-mode accent is bright, so it needs dark text.
-    static let onAccent = dynamic(light: .white,
-                                  dark: UIColor(red: 0.03, green: 0.15, blue: 0.13, alpha: 1))
+    /// Text/icon color that sits ON accent-filled surfaces. Accent is bright,
+    /// so it needs near-black text — `#08261F`.
+    static let onAccent = fixed(0x08261F)
 
-    static let accentGradient = LinearGradient(
-        colors: [
-            Color(dynamic(light: UIColor(red: 0.02, green: 0.72, blue: 0.62, alpha: 1),
-                          dark: UIColor(red: 0.25, green: 0.89, blue: 0.75, alpha: 1))),
-            Color(dynamic(light: UIColor(red: 0.00, green: 0.55, blue: 0.62, alpha: 1),
-                          dark: UIColor(red: 0.20, green: 0.72, blue: 0.85, alpha: 1))),
-        ],
-        startPoint: .topLeading,
-        endPoint: .bottomTrailing
-    )
+    /// Deep accent used for the Duolingo-style solid "edge" under primary
+    /// buttons — `#1A8578`.
+    static let accentEdge = fixed(0x1A8578)
 
-    /// Deep accent used for the Duolingo-style solid "edge" under primary buttons.
-    static let accentEdge = dynamic(light: UIColor(red: 0.00, green: 0.45, blue: 0.42, alpha: 1),
-                                    dark: UIColor(red: 0.10, green: 0.52, blue: 0.47, alpha: 1))
+    /// Tinted accent fill (Ask Oxy pill, chat entry) — `rgba(64,222,194,.12)`.
+    static let accentSoft = Color(uiColor: UIColor(red: 64/255, green: 222/255, blue: 194/255, alpha: 0.12))
 
-    // MARK: - Entry kinds
+    // MARK: - Entry kinds (§3)
 
+    /// SpO₂ · Heart rate · Journal · Water — same mint as accent.
     static let reading = accent
 
-    static let ventilation = dynamic(light: UIColor(red: 0.12, green: 0.52, blue: 0.85, alpha: 1),
-                                     dark: UIColor(red: 0.42, green: 0.76, blue: 1.00, alpha: 1))
+    /// Ventilation sessions — softer blue than the design-handoff `#2F85D6`
+    /// (75% sat). Desaturated ~15% for dark-mode comfort per Robi's rule.
+    static let ventilation = fixed(0x4C8FCC)
 
-    static let treatment = dynamic(light: UIColor(red: 0.92, green: 0.45, blue: 0.18, alpha: 1),
-                                   dark: UIColor(red: 1.00, green: 0.62, blue: 0.36, alpha: 1))
+    /// Treatment events — softer orange than the handoff `#EB731C`
+    /// (84% sat, hot). Desaturated ~20% + lightened so it stops burning
+    /// on the dark background.
+    static let treatment = fixed(0xD2865B)
 
-    static let lab = dynamic(light: UIColor(red: 0.52, green: 0.36, blue: 0.90, alpha: 1),
-                             dark: UIColor(red: 0.72, green: 0.60, blue: 1.00, alpha: 1))
+    /// Lab results — softer purple than the handoff `#8558E6` (73% sat).
+    /// Desaturated ~15% for dark-mode comfort.
+    static let lab = fixed(0x9977DB)
 
-    static let watch = dynamic(light: UIColor(red: 0.55, green: 0.60, blue: 0.66, alpha: 1),
-                               dark: UIColor(white: 0.60, alpha: 1))
+    /// HealthKit-sourced rows — muted grey `#999999`.
+    static let watch = fixed(0x999999)
 
-    // MARK: - Feedback
+    // MARK: - Feedback (§3)
 
-    static let warning = dynamic(light: UIColor(red: 0.85, green: 0.55, blue: 0.05, alpha: 1),
-                                 dark: UIColor(red: 1.00, green: 0.72, blue: 0.25, alpha: 1))
+    /// Env. banners, water-behind, cautions — softer amber than the
+    /// handoff `#FFB840` (100% sat, max-hot). Desaturated ~25% so the
+    /// alert cue reads as concern, not fire.
+    static let warning = fixed(0xE8B463)
 
-    static let streak = dynamic(light: UIColor(red: 0.95, green: 0.50, blue: 0.12, alpha: 1),
-                                dark: UIColor(red: 1.00, green: 0.62, blue: 0.25, alpha: 1))
+    /// 🔥 Streak flame & day count — softer than the handoff `#FF9E56`
+    /// (100% sat). Desaturated ~20% for dark-mode comfort.
+    static let streak = fixed(0xF2A87A)
+
+    /// 🪙 Oxypoints balance & earn amounts — same mint as accent.
+    static let oxypoints = accent
+
+    /// Chat error bubbles, delete affordance — `#FF8A8A`.
+    static let error = fixed(0xFF8A8A)
+
+    /// Fill for error surfaces — `rgba(255,107,107,.1)`.
+    static let errorSoft = Color(uiColor: UIColor(red: 255/255, green: 107/255, blue: 107/255, alpha: 0.10))
 
     // MARK: - Helpers
 
-    private static func dynamic(light: UIColor, dark: UIColor) -> Color {
-        Color(uiColor: UIColor { traits in
-            traits.userInterfaceStyle == .dark ? dark : light
-        })
+    /// Build a fixed sRGB color from a 0xRRGGBB integer. Fully opaque.
+    private static func fixed(_ rgb: UInt32) -> Color {
+        Color(
+            .sRGB,
+            red: Double((rgb >> 16) & 0xFF) / 255,
+            green: Double((rgb >> 8) & 0xFF) / 255,
+            blue: Double(rgb & 0xFF) / 255,
+            opacity: 1
+        )
     }
 }

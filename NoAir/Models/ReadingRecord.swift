@@ -5,7 +5,9 @@ import SwiftData
 final class ReadingRecord {
     var id: UUID
     var timestamp: Date
-    var spo2: Int
+    /// Optional so a reading can be pulse-only (Heart Rate log mode). A
+    /// non-nil value is the manually-logged SpO2 percentage 0-100.
+    var spo2: Int?
     var pulse: Int?
     var context: String?
     var symptoms: [String]
@@ -26,7 +28,7 @@ final class ReadingRecord {
     init(
         id: UUID = UUID(),
         timestamp: Date = .now,
-        spo2: Int,
+        spo2: Int? = nil,
         pulse: Int? = nil,
         context: String? = nil,
         symptoms: [String] = [],

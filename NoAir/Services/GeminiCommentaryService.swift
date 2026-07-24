@@ -4,8 +4,19 @@ final class GeminiCommentaryService {
     private let session = URLSession.shared
     private let modelName = "gemini-2.5-flash"
 
-    func generateCommentary(apiKey: String, prompt: String) async throws -> String {
-        let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+    /// Reads the Gemini API key from the app's Info.plist (`GeminiAPIKey`).
+    /// The key is baked into the bundle at build time — no user setup, no
+    /// UserDefaults. Callers hit `generateCommentary(prompt:)` and let the
+    /// service resolve credentials.
+    static var bundleAPIKey: String {
+        let value = Bundle.main.object(forInfoDictionaryKey: "GeminiAPIKey") as? String ?? ""
+        return value.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var isConfigured: Bool { !Self.bundleAPIKey.isEmpty }
+
+    func generateCommentary(prompt: String) async throws -> String {
+        let trimmedKey = Self.bundleAPIKey
         guard !trimmedKey.isEmpty else {
             throw GeminiCommentaryError.missingAPIKey
         }

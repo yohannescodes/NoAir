@@ -34,10 +34,14 @@ struct HealthInsightsSnapshot {
         latestPulse = recentReadings.first?.pulse
         lastVentilation = ventilations.sorted { $0.startTime > $1.startTime }.first
         recentTreatment = treatments.sorted { $0.timestamp > $1.timestamp }.first
-        manualLowestToday = todayReadings.map(\.spo2).min()
+        let todaySpo2Values = todayReadings.compactMap(\.spo2)
+        manualLowestToday = todaySpo2Values.min()
         lowestToday = [manualLowestToday, watchVitals?.spo2Min].compactMap(\.self).min()
-        averageToday = todayReadings.isEmpty ? nil : Double(todayReadings.map(\.spo2).reduce(0, +)) / Double(todayReadings.count)
-        readingsBelowThreshold24h = recentReadings.filter { $0.timestamp >= thresholdWindow && $0.spo2 < 90 }.count
+        averageToday = todaySpo2Values.isEmpty ? nil : Double(todaySpo2Values.reduce(0, +)) / Double(todaySpo2Values.count)
+        readingsBelowThreshold24h = recentReadings.filter { record in
+            guard record.timestamp >= thresholdWindow, let spo2 = record.spo2 else { return false }
+            return spo2 < 90
+        }.count
         self.watchVitals = watchVitals
 
         if let phlebotomyDate = phlebotomy?.timestamp {

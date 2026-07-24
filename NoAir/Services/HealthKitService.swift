@@ -29,7 +29,7 @@ final class HealthKitService {
             HKQuantityType(.oxygenSaturation),
             HKQuantityType(.heartRate),
         ]
-        let readTypes: Set<HKObjectType> = [
+        var readTypes: Set<HKObjectType> = [
             HKQuantityType(.oxygenSaturation),
             HKQuantityType(.heartRate),
             HKQuantityType(.restingHeartRate),
@@ -44,6 +44,11 @@ final class HealthKitService {
             HKCategoryType(.sleepAnalysis),
             HKObjectType.workoutType(),
         ]
+        // Medication samples are iOS 18+; add if the type resolves. Falls
+        // back cleanly on older runtimes without breaking auth.
+        if #available(iOS 18.0, *), let medicationType = Self.medicationSampleType {
+            readTypes.insert(medicationType)
+        }
 
         try await store.requestAuthorization(toShare: shareTypes, read: readTypes)
         hasRequestedAuthorization = true
@@ -215,15 +220,24 @@ final class HealthKitService {
         let syncVersion = max(1, Int(reading.updatedAt.timeIntervalSince1970))
         var samples: [HKQuantitySample] = []
 
-        samples.append(
-            HKQuantitySample(
-                type: HKQuantityType(.oxygenSaturation),
-                quantity: HKQuantity(unit: .percent(), doubleValue: Double(reading.spo2) / 100),
-                start: reading.timestamp,
-                end: reading.timestamp,
-                metadata: exportMetadata(identifier: "\(Self.syncIdentifierPrefix)spo2-\(reading.id.uuidString)", version: syncVersion)
+        if let spo2 = reading.spo2 {
+            samples.append(
+                HKQuantitySample(
+                    type: HKQuantityType(.oxygenSaturation),
+                    quantity: HKQuantity(unit: .percent(), doubleValue: Double(spo2) / 100),
+                    start: reading.timestamp,
+                    end: reading.timestamp,
+                    metadata: exportMetadata(identifier: "\(Self.syncIdentifierPrefix)spo2-\(reading.id.uuidString)", version: syncVersion)
+                )
             )
-        )
+        } else if reading.healthKitExportedAt != nil {
+            // Editor cleared SpO2 on a previously-exported reading — remove the
+            // orphaned sample from Health so it doesn't linger.
+            try? await deleteExportedSamples(
+                withIdentifiers: ["\(Self.syncIdentifierPrefix)spo2-\(reading.id.uuidString)"],
+                types: [HKQuantityType(.oxygenSaturation)]
+            )
+        }
 
         if let pulse = reading.pulse {
             samples.append(
@@ -364,6 +378,57 @@ final class HealthKitService {
         @unknown default: "Asleep"
         }
     }
+
+    // MARK: - Medication samples (iOS 18+)
+
+    /// Resolves the medication-log HKSampleType if the OS supports it. We
+    /// look it up dynamically via the runtime identifier so the app still
+    /// compiles and runs on older SDKs that don't have the constant. Returns
+    /// nil on any runtime that doesn't expose the type.
+    nonisolated static var medicationSampleType: HKSampleType? {
+        guard #available(iOS 18.0, *) else { return nil }
+        // HKCategoryTypeIdentifier.medicationRecord ships in iOS 18. Use the
+        // raw identifier to keep this file compiling against older SDKs.
+        return HKObjectType.categoryType(forIdentifier: HKCategoryTypeIdentifier(rawValue: "HKCategoryTypeIdentifierMedicationRecord"))
+    }
+
+    /// A user's logged medication dose imported from the Health app.
+    /// Callers hand these to TreatmentImporter which upserts them as
+    /// `TreatmentEvent(source: .healthKit)` rows, deduped on `sampleId`.
+    struct MedicationDose: Sendable {
+        let sampleId: UUID
+        let name: String?
+        let dose: String?
+        let takenAt: Date
+    }
+
+    /// Fetches medication doses logged into the Health app in the given
+    /// window. Returns [] when the runtime doesn't support medication
+    /// samples or when auth was denied — the caller can treat both as
+    /// "nothing to import".
+    func medicationDoses(in interval: DateInterval) async -> [MedicationDose] {
+        guard #available(iOS 18.0, *), let type = Self.medicationSampleType else {
+            return []
+        }
+        let predicate = HKQuery.predicateForSamples(withStart: interval.start, end: interval.end)
+        let descriptor = HKSampleQueryDescriptor(
+            predicates: [.sample(type: type, predicate: predicate)],
+            sortDescriptors: [SortDescriptor(\.startDate, order: .reverse)]
+        )
+        guard let samples = try? await descriptor.result(for: store) else { return [] }
+        return samples.map { sample in
+            // Metadata keys for the Health medication logging feature. We
+            // read them defensively — Apple's semi-public keys may shift.
+            let metadata = sample.metadata ?? [:]
+            let name = metadata["HKMetadataKeyMedicationName"] as? String
+                ?? metadata["MedicationName"] as? String
+            let dose = metadata["HKMetadataKeyMedicationDose"] as? String
+                ?? metadata["MedicationDose"] as? String
+            return MedicationDose(sampleId: sample.uuid, name: name, dose: dose, takenAt: sample.startDate)
+        }
+    }
+
+    // MARK: - Activity name
 
     nonisolated private static func activityName(for type: HKWorkoutActivityType) -> String {
         switch type {

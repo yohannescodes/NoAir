@@ -43,8 +43,8 @@ struct ReadingReminderService {
 
         let intervalSeconds = TimeInterval(max(intervalMinutes, 30) * 60)
         let content = UNMutableNotificationContent()
-        content.title = "Log your reading"
-        content.body = "Open NoAir and record your latest SpO2 and pulse."
+        content.title = "Morning check-in?"
+        content.body = "A quick reading helps me spot your patterns. ☀️"
         content.sound = .default
         content.threadIdentifier = "reading-reminder"
 

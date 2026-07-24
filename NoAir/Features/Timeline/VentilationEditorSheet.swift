@@ -41,7 +41,11 @@ struct VentilationEditorSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NABrandNavBar(
+            title: "Edit Ventilation",
+            leading: .cancel { dismiss() },
+            trailing: .primary("Save", action: save)
+        ) {
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.xl) {
                     NACard(title: "Session", systemImage: "wind", iconTint: Theme.ventilation) {
@@ -126,19 +130,8 @@ struct VentilationEditorSheet: View {
                 }
                 .padding()
             }
-            .background(Theme.background)
             .scrollDismissesKeyboard(.interactively)
-            .navigationTitle("Edit Ventilation")
-            .navigationBarTitleDisplayMode(.inline)
             .keyboardDoneToolbar(focus: $focusedField)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", action: dismiss.callAsFunction)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save", action: save)
-                }
-            }
         }
         .presentationDragIndicator(.visible)
         .presentationBackground(Theme.background)
