@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ContentView: View {
     @Environment(HealthDataProvider.self) private var healthDataProvider
+    @Environment(HealthKitService.self) private var healthKitService
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.modelContext) private var modelContext
 
@@ -14,6 +15,7 @@ struct ContentView: View {
     @State private var selectedLogKind: LogEntryKind = .reading
     @State private var timelineFilter: TimelineFilter = .all
     @State private var activeTimelineEditor: TimelineEditorRoute?
+    @State private var didRunLaunchTasks = false
 
     var body: some View {
         Group {
@@ -31,11 +33,14 @@ struct ContentView: View {
             }
         }
         .task {
-            await healthDataProvider.refresh()
+            await runLaunchTasksIfNeeded()
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
-                Task { await healthDataProvider.refresh() }
+                Task {
+                    await healthDataProvider.refresh()
+                    await importHealthKitMedications()
+                }
             }
         }
     }
@@ -73,25 +78,44 @@ struct ContentView: View {
         .background(Theme.background.ignoresSafeArea())
     }
 
+    // MARK: - Launch orchestration
+
     private func bootstrapPreferences() {
         let preferences = UserPreferences()
         modelContext.insert(preferences)
         try? modelContext.save()
     }
+
+    /// Runs once per process launch: legacy migrations + first HealthKit
+    /// data refresh + medication import. Guarded so scene reactivations
+    /// don't re-run the migration pass on every foreground.
+    private func runLaunchTasksIfNeeded() async {
+        guard !didRunLaunchTasks else { return }
+        didRunLaunchTasks = true
+        LegacyMigrator.run(context: modelContext)
+        await healthDataProvider.refresh()
+        await importHealthKitMedications()
+    }
+
+    private func importHealthKitMedications() async {
+        guard healthDataProvider.isConnected else { return }
+        let importer = TreatmentImporter(healthKit: healthKitService)
+        await importer.importRecentDoses(context: modelContext)
+    }
 }
 
-/// Custom bottom bar matching screens 8-12: emoji icons, 9pt labels,
-/// 1pt top hairline, surface bg. Emoji per designer intent, but a
-/// hidden SF Symbol underlay carries the accessibility label so the
-/// tab is still readable to VoiceOver.
+/// Custom bottom bar per Design System §7: line SF Symbols, 9pt labels, 1pt
+/// top hairline, surface bg. Icons: house / plus.circle /
+/// chart.line.uptrend.xyaxis / list.bullet. Active = accent, inactive =
+/// textTertiary.
 struct NABottomTabBar: View {
     @Binding var selection: AppTab
 
-    private let items: [(tab: AppTab, emoji: String, label: String)] = [
-        (.home, "🏠", "Home"),
-        (.log, "➕", "Log"),
-        (.trends, "📈", "Trends"),
-        (.timeline, "🗂️", "Timeline"),
+    private let items: [(tab: AppTab, symbol: String, label: String)] = [
+        (.home, "house", "Home"),
+        (.log, "plus.circle", "Log"),
+        (.trends, "chart.line.uptrend.xyaxis", "Trends"),
+        (.timeline, "list.bullet", "Timeline"),
     ]
 
     var body: some View {
@@ -101,9 +125,9 @@ struct NABottomTabBar: View {
                     selection = item.tab
                 } label: {
                     VStack(spacing: 3) {
-                        Text(item.emoji)
-                            .font(.system(size: 18))
-                            .opacity(selection == item.tab ? 1 : 0.55)
+                        Image(systemName: item.symbol)
+                            .font(.system(size: 20, weight: .regular))
+                            .foregroundStyle(selection == item.tab ? Theme.accent : Theme.textTertiary)
                         Text(item.label)
                             .font(.system(size: 9, weight: .bold, design: .rounded))
                             .foregroundStyle(selection == item.tab ? Theme.accent : Theme.textTertiary)
