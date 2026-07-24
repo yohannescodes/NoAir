@@ -255,6 +255,7 @@ struct TrendsView: View {
                     .foregroundStyle(Theme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             } else {
+                overnightLegend
                 Chart {
                     ForEach(healthDataProvider.overnightSpO2) { point in
                         LineMark(
@@ -293,6 +294,31 @@ struct TrendsView: View {
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(cardChrome)
+    }
+
+    /// Legend for the overnight chart. Two color swatches label the SpO2
+    /// (accent) and HR (treatment tint) series so the lines are readable
+    /// without tapping. Sits above the chart because SpO2 is the primary
+    /// story and HR is contextual.
+    private var overnightLegend: some View {
+        HStack(spacing: 14) {
+            legendSwatch(color: Theme.accent, label: "SpO₂")
+            if !overnightHeartRate.isEmpty {
+                legendSwatch(color: Theme.treatment.opacity(0.7), label: "Heart rate")
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func legendSwatch(color: Color, label: String) -> some View {
+        HStack(spacing: 6) {
+            Capsule()
+                .fill(color)
+                .frame(width: 14, height: 3)
+            Text(label)
+                .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                .foregroundStyle(Theme.textSecondary)
+        }
     }
 
     /// Cardiac panel — resting HR, HRV, VO2 max, respiratory rate in a

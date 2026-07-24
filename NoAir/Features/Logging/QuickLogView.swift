@@ -34,40 +34,64 @@ struct QuickLogView: View {
 
     @State private var mode: LogMode = .none
     @State private var savedNote: String?
+    /// Bumped by every capture card's `onSaved` — drives the sensory-feedback
+    /// modifier at the QuickLogView level so success is always confirmed
+    /// even when the card itself dismisses instantly.
+    @State private var saveTick: Int = 0
     @State private var showsIMTSession = false
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Log")
-                    .font(.system(size: 22, weight: .heavy, design: .rounded))
-                    .foregroundStyle(Theme.textPrimary)
+        ZStack(alignment: .top) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Log")
+                        .font(.system(size: 22, weight: .heavy, design: .rounded))
+                        .foregroundStyle(Theme.textPrimary)
 
-                mascotIntro
+                    mascotIntro
 
-                chipRow
+                    chipRow
 
-                modePane
-
-                if let savedNote {
-                    savedNoteBubble(savedNote)
-                        .transition(.opacity)
+                    modePane
                 }
+                .padding(.top, 16)
+                .padding(.horizontal, 18)
+                .padding(.bottom, 24)
+                .animation(.spring(duration: 0.35, bounce: 0.2), value: mode)
             }
-            .padding(.top, 16)
-            .padding(.horizontal, 18)
-            .padding(.bottom, 24)
-            .animation(.spring(duration: 0.35, bounce: 0.2), value: mode)
-            .animation(.easeOut(duration: 0.25), value: savedNote)
+            .background(Theme.background.ignoresSafeArea())
+            .scrollDismissesKeyboard(.interactively)
+
+            if let savedNote {
+                SavedToast(text: savedNote)
+                    .padding(.top, 8)
+                    .padding(.horizontal, 18)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .zIndex(1)
+            }
         }
-        .background(Theme.background.ignoresSafeArea())
-        .scrollDismissesKeyboard(.interactively)
+        .animation(.spring(duration: 0.35, bounce: 0.25), value: savedNote)
+        .sensoryFeedback(.success, trigger: saveTick)
         .fullScreenCover(isPresented: $showsIMTSession) {
             IMTSessionView(onFinish: {
                 showsIMTSession = false
-                savedNote = "Nice — set logged."
-                mode = .none
+                confirmSave("Nice — set logged.")
             })
+        }
+    }
+
+    /// Central save-confirmed hook — collapses the active form so the
+    /// primary button disappears (kills the double-tap dupe problem at the
+    /// root), fires the success haptic, and shows a top-anchored toast that
+    /// auto-dismisses after ~2.4s.
+    private func confirmSave(_ note: String) {
+        mode = .none
+        savedNote = note
+        saveTick &+= 1
+        let ticket = saveTick
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_400_000_000)
+            if ticket == saveTick { savedNote = nil }
         }
     }
 
@@ -83,37 +107,47 @@ struct QuickLogView: View {
             SpO2CaptureCard(
                 preferences: preferences,
                 readingEnricher: readingEnricher,
-                onSaved: { savedNote = "Reading saved. Oxy noted it." }
+                onSaved: { confirmSave("Reading saved. Oxy noted it.") }
             )
             .transition(.opacity.combined(with: .move(edge: .top)))
 
         case .heartRate:
             HeartRateCaptureCard(
                 readingEnricher: readingEnricher,
-                onSaved: { bpm in savedNote = "\(bpm) bpm logged." }
+                onSaved: { bpm in confirmSave("\(bpm) bpm logged.") }
             )
             .transition(.opacity.combined(with: .move(edge: .top)))
 
         case .ventilation:
-            VentilationCaptureCard(onSaved: { savedNote = "Ventilation session saved." })
+            VentilationCaptureCard(onSaved: { confirmSave("Ventilation session saved.") })
                 .transition(.opacity.combined(with: .move(edge: .top)))
 
         case .treatment:
-            TreatmentCaptureCard(onSaved: { name in savedNote = "\(name) saved." })
+            TreatmentCaptureCard(onSaved: { name in confirmSave("\(name) saved.") })
                 .transition(.opacity.combined(with: .move(edge: .top)))
 
         case .lab:
-            LabCaptureCard(onSaved: { name in savedNote = "\(name) logged." })
+            LabCaptureCard(onSaved: { name in confirmSave("\(name) logged.") })
                 .transition(.opacity.combined(with: .move(edge: .top)))
 
         case .journal:
-            JournalCaptureCard(onSaved: { savedNote = "Noted. Oxy will remember this next time." })
+            JournalCaptureCard(onSaved: { confirmSave("Noted. Oxy will remember this next time.") })
                 .transition(.opacity.combined(with: .move(edge: .top)))
 
         case .water:
             WaterCaptureCard(
                 preferences: preferences,
-                onLog: { total in savedNote = "Logged. \(total)/\(preferences.targetMl) ml today." }
+                onLog: { total in
+                    // Water uses +/- taps — don't collapse the tile, just
+                    // show a lightweight toast + haptic per tap.
+                    savedNote = "Logged. \(total)/\(preferences.targetMl) ml today."
+                    saveTick &+= 1
+                    let ticket = saveTick
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 1_600_000_000)
+                        if ticket == saveTick { savedNote = nil }
+                    }
+                }
             )
             .transition(.opacity.combined(with: .move(edge: .top)))
 
@@ -190,25 +224,34 @@ struct QuickLogView: View {
         .buttonStyle(NAPressableButtonStyle())
     }
 
-    // MARK: - Saved note bubble
+}
 
-    private func savedNoteBubble(_ text: String) -> some View {
-        HStack(spacing: 8) {
-            OxyMascotView(mood: .cheer, size: 30, showGlow: false)
+/// Top-anchored saved-confirmation toast. Sits above the scroll content so
+/// success is unmissable regardless of form scroll position. Accent-tinted
+/// with a checkmark glyph to read as "success" at a glance — the previous
+/// mascot-in-a-bubble was too easy to miss when it landed below fold.
+private struct SavedToast: View {
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 16, weight: .bold))
+                .foregroundStyle(Theme.background)
             Text(text)
-                .font(.system(size: 12, design: .rounded))
-                .foregroundStyle(Theme.textPrimary)
+                .font(.system(size: 13, weight: .heavy, design: .rounded))
+                .foregroundStyle(Theme.background)
+                .lineLimit(2)
+            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Theme.surface)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(Theme.stroke, lineWidth: 1)
-                )
+            Capsule(style: .continuous)
+                .fill(Theme.accent)
         )
+        .shadow(color: Theme.accent.opacity(0.35), radius: 12, x: 0, y: 6)
     }
 }
 

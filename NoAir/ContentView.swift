@@ -128,7 +128,7 @@ struct ContentView: View {
             SettingsView(preferences: preferences)
         }
         .fullScreenCover(isPresented: $showsChat) {
-            ChatView(preferences: preferences)
+            ChatView(readingEnricher: readingEnricher, preferences: preferences)
         }
         .sheet(isPresented: $showsCloset) {
             OxyClosetView(preferences: preferences)

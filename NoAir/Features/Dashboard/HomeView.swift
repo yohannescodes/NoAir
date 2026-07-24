@@ -33,7 +33,6 @@ struct HomeView: View {
 
     @State private var mood: OxyMood = .calm
     @State private var showConfetti = false
-    @State private var showDetails = false
     @State private var celebratedQuestKey: String?
     @State private var isRefreshingContext = false
     @State private var liveContext: ReadingEnrichment?
@@ -65,37 +64,6 @@ struct HomeView: View {
                 }
 
                 hydrationTile
-
-                DisclosureGroup(isExpanded: $showDetails) {
-                    VStack(spacing: 14) {
-                        if !healthDataProvider.isConnected {
-                            connectHealthCard
-                        }
-                        if healthDataProvider.isConnected {
-                            watchTodayCard
-                        }
-                        todayCard
-                        if healthDataProvider.isConnected {
-                            cardiacCard
-                        }
-                        contextCard
-                        ReadingReminderCardView(latestReadingDate: readings.first?.timestamp)
-                        AICommentaryCardView(
-                            readings: readings,
-                            ventilations: ventilations,
-                            treatments: treatments,
-                            labs: labs,
-                            autoGenerateOnAppear: false
-                        )
-                    }
-                    .padding(.top, 12)
-                } label: {
-                    Text(showDetails ? "Hide details" : "More detail")
-                        .font(Typography.bodyEmphasized)
-                        .foregroundStyle(Theme.accent)
-                }
-
-                DisclaimerCardView()
             }
             .padding(.top, 16)
             .padding(.horizontal, 18)
@@ -108,8 +76,8 @@ struct HomeView: View {
                     .transition(.opacity)
             }
         }
+        .overlay(alignment: .bottomTrailing) { refreshFAB }
         .refreshable {
-            await healthDataProvider.refresh()
             await refreshContext()
         }
         .task {
@@ -216,15 +184,21 @@ struct HomeView: View {
                         .foregroundStyle(Theme.textTertiary)
                         .tracking(0.5)
 
-                    HStack(alignment: .lastTextBaseline, spacing: 6) {
+                    HStack(alignment: .lastTextBaseline, spacing: 4) {
                         Text("\(latestSpo2Display)%")
                             .font(.system(size: 32, weight: .heavy, design: .rounded))
                             .foregroundStyle(Theme.textPrimary)
                             .contentTransition(.numericText())
                         if let pulse = latestPulse {
-                            Text("\(pulse) bpm")
-                                .font(.system(size: 13, weight: .bold, design: .rounded))
-                                .foregroundStyle(Theme.textSecondary)
+                            // Subscript treatment: baseline-aligned, ~35% of
+                            // the SpO2 glyph, muted color so the primary
+                            // reading still reads as the hero.
+                            (Text("\(pulse)")
+                                .font(.system(size: 12, weight: .heavy, design: .rounded))
+                             + Text(" bpm")
+                                .font(.system(size: 10, weight: .semibold, design: .rounded)))
+                                .foregroundStyle(Theme.textTertiary)
+                                .baselineOffset(2)
                         }
                     }
 
@@ -272,6 +246,39 @@ struct HomeView: View {
                         .strokeBorder(Theme.stroke, lineWidth: 1)
                 )
         )
+    }
+
+    /// Floating action button anchored bottom-right of the Home scroll.
+    /// One tap fans out: HealthKit vitals refresh + environment enrichment
+    /// (weather, temperature, humidity, altitude, locality) + watch streak
+    /// recompute. Rotates while `isRefreshingContext` so the user sees the
+    /// tap register even before the async work returns.
+    private var refreshFAB: some View {
+        Button {
+            Task { await refreshContext() }
+        } label: {
+            Image(systemName: "arrow.clockwise")
+                .font(.system(size: 20, weight: .heavy))
+                .foregroundStyle(Theme.background)
+                .frame(width: 52, height: 52)
+                .background(
+                    Circle()
+                        .fill(Theme.accent)
+                        .shadow(color: Theme.accent.opacity(0.4), radius: 12, x: 0, y: 6)
+                )
+                .rotationEffect(.degrees(isRefreshingContext ? 360 : 0))
+                .animation(
+                    isRefreshingContext
+                        ? .linear(duration: 1).repeatForever(autoreverses: false)
+                        : .default,
+                    value: isRefreshingContext
+                )
+        }
+        .buttonStyle(NAPressableButtonStyle())
+        .disabled(isRefreshingContext)
+        .padding(.trailing, 18)
+        .padding(.bottom, 84) // clear of the tab bar + insight pill
+        .accessibilityLabel(isRefreshingContext ? "Refreshing context" : "Refresh Health and environment")
     }
 
     private var energyCard: some View {
@@ -563,7 +570,15 @@ struct HomeView: View {
         return preferences.baselineSpo2
     }
 
-    private var latestPulse: Int? { latestReading?.pulse }
+    /// Freshest pulse we can show — manual reading first, then Apple
+    /// Watch resting HR from HealthKit. Nil only when we have neither.
+    private var latestPulse: Int? {
+        if let manual = latestReading?.pulse { return manual }
+        if let watch = healthDataProvider.restingHeartRate {
+            return Int(watch.value.rounded())
+        }
+        return nil
+    }
 
     private var zoneLabel: String {
         preferences.personalZoneLabel(for: latestSpo2Display)
@@ -829,135 +844,25 @@ struct HomeView: View {
         }
     }
 
+    /// Full-context refresh — fired from the FAB and from Chat's cold open.
+    /// Fans out: HealthKit vitals refresh, environment (weather/humidity/
+    /// altitude/temperature) enrichment, and watch streak-day recompute.
+    /// Idempotent via the `isRefreshingContext` gate.
     private func refreshContext() async {
         guard !isRefreshingContext else { return }
         isRefreshingContext = true
-        let enrichment = await readingEnricher.enrichReading()
-        liveContext = enrichment
+        async let hk: Void = healthDataProvider.refresh()
+        async let enrichment = readingEnricher.enrichReading()
+        let (_, freshEnrichment) = await (hk, enrichment)
+        liveContext = freshEnrichment
         if let latestReading {
-            latestReading.apply(enrichment)
+            latestReading.apply(freshEnrichment)
             try? modelContext.save()
         }
+        await refreshWatchStreakDays()
         isRefreshingContext = false
     }
 
-    // MARK: - Legacy detail cards (kept behind "More detail")
-
-    private var connectHealthCard: some View {
-        NACard(title: "Apple Health", systemImage: "heart.circle.fill") {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Connect Apple Health to see your watch's SpO2 and heart data alongside manual readings.")
-                    .font(Typography.body)
-                    .foregroundStyle(Theme.textSecondary)
-                Button("Connect Apple Health") {
-                    Task { await healthDataProvider.connect() }
-                }
-                .buttonStyle(NAPrimaryButtonStyle())
-            }
-        }
-    }
-
-    private var watchTodayCard: some View {
-        NACard(title: "Apple Watch Today", systemImage: "applewatch", iconTint: Theme.watch) {
-            if let vitals = healthDataProvider.todayVitals {
-                let range = vitals.spo2Min.flatMap { min in
-                    vitals.spo2Max.map { max in min == max ? "\(min)%" : "\(min)–\(max)%" }
-                } ?? "—"
-                Text("SpO2 \(range) · \(vitals.spo2SampleCount) samples")
-                    .font(Typography.body)
-                    .foregroundStyle(Theme.textSecondary)
-            } else {
-                Text("No watch samples in Health yet today.")
-                    .font(Typography.body)
-                    .foregroundStyle(Theme.textSecondary)
-            }
-        }
-    }
-
-    private var todayCard: some View {
-        let snapshot = HealthInsightsSnapshot(
-            readings: readings,
-            ventilations: ventilations,
-            treatments: treatments,
-            watchVitals: healthDataProvider.todayVitals
-        )
-        return NACard(title: "Today", systemImage: "sun.max.fill") {
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                NAMetricTile(
-                    title: "Lowest Logged",
-                    value: snapshot.manualLowestToday.map { "\($0)%" } ?? "—",
-                    systemImage: "arrow.down",
-                    tint: snapshot.manualLowestToday.map { SpO2Zone(spo2: $0).color } ?? Theme.accent
-                )
-                NAMetricTile(
-                    title: "<\(SpO2Zone.belowThresholdCutoff)% / 24h",
-                    value: "\(snapshot.readingsBelowThreshold24h)",
-                    systemImage: "exclamationmark.triangle.fill",
-                    tint: snapshot.readingsBelowThreshold24h > 0 ? Theme.warning : Theme.accent
-                )
-                NAMetricTile(
-                    title: "Phlebotomy",
-                    value: snapshot.daysSincePhlebotomy.map { "\($0)d ago" } ?? "—",
-                    systemImage: "drop.fill",
-                    tint: Theme.treatment
-                )
-                NAMetricTile(
-                    title: "Baseline",
-                    value: "\(preferences.baselineSpo2)%",
-                    systemImage: "scope",
-                    tint: Theme.accent
-                )
-            }
-        }
-    }
-
-    private var cardiacCard: some View {
-        NACard(title: "Heart & Sleep", systemImage: "heart.fill", iconTint: Theme.treatment) {
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                NAMetricTile(
-                    title: "Resting HR",
-                    value: healthDataProvider.restingHeartRate.map { "\(Int($0.value.rounded())) bpm" } ?? "—",
-                    systemImage: "heart.fill",
-                    tint: Theme.treatment
-                )
-                NAMetricTile(
-                    title: "HRV",
-                    value: healthDataProvider.hrvSDNN.map { "\(Int($0.value.rounded())) ms" } ?? "—",
-                    systemImage: "waveform.path.ecg",
-                    tint: Theme.ventilation
-                )
-            }
-        }
-    }
-
-    private var contextCard: some View {
-        NACard(title: "Context", systemImage: "cloud.sun.fill", iconTint: Theme.ventilation) {
-            VStack(alignment: .leading, spacing: 12) {
-                Text(environmentSummary ?? "Weather, altitude, and locality need location access.")
-                    .font(Typography.body)
-                    .foregroundStyle(Theme.textSecondary)
-                Button(isRefreshingContext ? "Refreshing…" : "Refresh Context") {
-                    Task { await refreshContext() }
-                }
-                .buttonStyle(NASecondaryButtonStyle())
-                .disabled(isRefreshingContext)
-            }
-        }
-    }
-
-    private var environmentSummary: String? {
-        var parts: [String] = []
-        if let weather = liveContext?.environment?.weatherCondition ?? latestReading?.weatherCondition {
-            parts.append(weather)
-        }
-        if let temp = liveContext?.environment?.temperatureC ?? latestReading?.temperatureC {
-            parts.append("\(temp.formatted(.number.precision(.fractionLength(1))))°C")
-        }
-        if let alt = liveContext?.location?.altitudeMeters ?? latestReading?.altitudeMeters {
-            parts.append("\(alt.formatted(.number.precision(.fractionLength(0)))) m")
-        }
-        return parts.isEmpty ? nil : parts.joined(separator: " • ")
-    }
 }
 
 private struct Quest: Identifiable {

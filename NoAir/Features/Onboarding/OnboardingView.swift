@@ -152,7 +152,8 @@ struct OnboardingView: View {
             }
 
             if !selectedTracked.isEmpty {
-                onboardingChip(label: "Next →", style: .primary, action: confirmTracked)
+                onboardingChip(label: "Next  →", style: .cta, action: confirmTracked)
+                    .padding(.top, 4)
             }
         }
     }
@@ -181,7 +182,7 @@ struct OnboardingView: View {
                 stepperButton(symbol: "plus") { baseline = min(100, baseline + 1) }
             }
 
-            onboardingChip(label: "That's my normal", style: .primary, fullWidth: true, action: confirmBaseline)
+            onboardingChip(label: "That's my normal", style: .cta, fullWidth: true, action: confirmBaseline)
         }
         .padding(18)
         .frame(maxWidth: .infinity)
@@ -215,7 +216,7 @@ struct OnboardingView: View {
         HStack(spacing: 8) {
             Spacer(minLength: 0)
             onboardingChip(label: "Later", style: .secondary) { connectHealth(false) }
-            onboardingChip(label: "Yes, connect Health", style: .primary) { connectHealth(true) }
+            onboardingChip(label: "Yes, connect Health", style: .cta) { connectHealth(true) }
         }
     }
 
@@ -224,35 +225,81 @@ struct OnboardingView: View {
     private var enterChip: some View {
         HStack {
             Spacer(minLength: 0)
-            onboardingChip(label: "Let's go →", style: .primary, action: finish)
+            onboardingChip(label: "Let's go  →", style: .cta, action: finish)
         }
     }
 
     // MARK: - Chip primitive
 
-    private enum ChipStyle { case primary, secondary }
+    /// Three visual tiers so onboarding responses are visually distinct at
+    /// a glance:
+    /// - `.cta` is a committing action (Next, Let's go, "That's my normal")
+    ///   drawn as a taller, white-filled pill with a drop shadow — reads as
+    ///   "primary button" the same way iMessage's Send does against blue
+    ///   suggestion chips.
+    /// - `.primary` is a *selected* multi-select tag — accent fill.
+    /// - `.secondary` is an *unselected* multi-select tag — hollow with a
+    ///   stroke.
+    private enum ChipStyle { case cta, primary, secondary }
 
     private func onboardingChip(label: String, style: ChipStyle, fullWidth: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(label)
-                .font(.system(size: 13, weight: .bold, design: .rounded))
-                .foregroundStyle(style == .primary ? Theme.onAccent : Theme.textSecondary)
-                .padding(.horizontal, 14)
-                .padding(.vertical, style == .primary ? 9 : 8)
+                .font(.system(
+                    size: style == .cta ? 14 : 13,
+                    weight: style == .cta ? .heavy : .bold,
+                    design: .rounded
+                ))
+                .foregroundStyle(chipForeground(style))
+                .padding(.horizontal, style == .cta ? 20 : 14)
+                .padding(.vertical, style == .cta ? 12 : (style == .primary ? 9 : 8))
+                .frame(minWidth: style == .cta ? 96 : nil)
                 .frame(maxWidth: fullWidth ? .infinity : nil)
                 .background(
                     Capsule(style: .continuous)
-                        .fill(style == .primary ? Theme.accent : Color.clear)
+                        .fill(chipBackground(style))
                 )
                 .overlay(
                     Capsule(style: .continuous)
-                        .strokeBorder(style == .primary ? .clear : Theme.stroke, lineWidth: 1.5)
+                        .strokeBorder(chipStroke(style), lineWidth: style == .secondary ? 1.5 : 0)
                 )
                 .compositingGroup()
-                .shadow(color: style == .primary ? Theme.accentEdge : .clear,
-                        radius: 0, x: 0, y: 3)
+                .shadow(
+                    color: chipShadow(style),
+                    radius: style == .cta ? 12 : 0,
+                    x: 0,
+                    y: style == .cta ? 4 : 3
+                )
         }
         .buttonStyle(NAPressableButtonStyle())
+    }
+
+    private func chipForeground(_ style: ChipStyle) -> Color {
+        switch style {
+        case .cta: return Theme.background          // dark text on white pill
+        case .primary: return Theme.onAccent        // dark text on accent
+        case .secondary: return Theme.textSecondary
+        }
+    }
+
+    private func chipBackground(_ style: ChipStyle) -> Color {
+        switch style {
+        case .cta: return Theme.textPrimary         // near-white in dark mode
+        case .primary: return Theme.accent
+        case .secondary: return .clear
+        }
+    }
+
+    private func chipStroke(_ style: ChipStyle) -> Color {
+        style == .secondary ? Theme.stroke : .clear
+    }
+
+    private func chipShadow(_ style: ChipStyle) -> Color {
+        switch style {
+        case .cta: return Theme.accent.opacity(0.45)
+        case .primary: return Theme.accentEdge
+        case .secondary: return .clear
+        }
     }
 
     // MARK: - State transitions

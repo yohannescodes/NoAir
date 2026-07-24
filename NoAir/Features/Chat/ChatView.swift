@@ -12,6 +12,7 @@ struct ChatView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(HealthDataProvider.self) private var healthDataProvider
+    let readingEnricher: ReadingEnricher
 
     let preferences: UserPreferences
     /// Stable UUID for the single conversation per install. Sourced from
@@ -28,6 +29,11 @@ struct ChatView: View {
     @State private var draft: String = ""
     @State private var isGenerating: Bool = false
     @State private var failureMessage: String?
+    /// True while the cold-open context refresh (HealthKit + environment) is
+    /// in flight. The header shows "loading context…" and the composer is
+    /// disabled until it flips false so the first turn always has fresh
+    /// grounding.
+    @State private var isLoadingContext: Bool = false
     @FocusState private var composerFocused: Bool
 
     private let service = GeminiChatService()
@@ -48,6 +54,23 @@ struct ChatView: View {
             composer
         }
         .background(Theme.background.ignoresSafeArea())
+        .task { await refreshContextIfNeeded() }
+    }
+
+    /// Fired once per modal open. Pulls the freshest HealthKit + environment
+    /// snapshot so the very first turn has grounding, even if the user
+    /// hasn't opened Home in a while. Guarded so re-render doesn't re-fire.
+    private func refreshContextIfNeeded() async {
+        guard !isLoadingContext else { return }
+        isLoadingContext = true
+        async let hk: Void = healthDataProvider.refresh()
+        async let enrichment = readingEnricher.enrichReading()
+        let (_, freshEnrichment) = await (hk, enrichment)
+        if let latest = readings.first {
+            latest.apply(freshEnrichment)
+            try? modelContext.save()
+        }
+        isLoadingContext = false
     }
 
     // MARK: - Header
@@ -67,9 +90,10 @@ struct ChatView: View {
                 Text("Oxy")
                     .font(.system(size: 14, weight: .heavy, design: .rounded))
                     .foregroundStyle(Theme.textPrimary)
-                Text(isGenerating ? "typing…" : "powered by Gemini")
+                Text(headerSubtitle)
                     .font(.system(size: 10, design: .rounded))
-                    .foregroundStyle(isGenerating ? Theme.textTertiary : Theme.accent)
+                    .foregroundStyle(headerSubtitleTint)
+                    .contentTransition(.opacity)
             }
             Spacer()
             Color.clear.frame(width: 32, height: 32)
@@ -77,6 +101,18 @@ struct ChatView: View {
         .padding(.horizontal, 18)
         .padding(.top, 8)
         .padding(.bottom, 8)
+    }
+
+    private var headerSubtitle: String {
+        if isLoadingContext { return "loading fresh context…" }
+        if isGenerating { return "typing…" }
+        return "powered by Gemini"
+    }
+
+    private var headerSubtitleTint: Color {
+        if isLoadingContext { return Theme.textTertiary }
+        if isGenerating { return Theme.textTertiary }
+        return Theme.accent
     }
 
     // MARK: - Empty state (§A2)
@@ -330,7 +366,9 @@ struct ChatView: View {
     }
 
     private var sendEnabled: Bool {
-        !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isGenerating
+        !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !isGenerating
+            && !isLoadingContext
     }
 
     @ViewBuilder
